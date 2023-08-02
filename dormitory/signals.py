@@ -1,0 +1,17 @@
+from django.db.models.signals import post_save, pre_save
+from django.dispatch import receiver
+from rest_framework.exceptions import ValidationError
+
+from dormitory.models import Room, Booking
+
+
+@receiver(pre_save, sender=Booking)
+def add_room_person(sender, instance, **kwargs):
+    print('mee')
+    room = Room.objects.get(pk=instance.room.id)
+    room_place = room.room_type.place
+    if room_place != room.person_count:
+        room.person_count += 1
+        room.save()
+    else:
+        raise ValidationError({'room': 'this room is full'})

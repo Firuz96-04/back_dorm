@@ -1,0 +1,26 @@
+# Compiled Python files
+*.pyc
+__pycache__/
+
+# Django related files
+*.log
+*.pot
+*.sqlite3
+/static/
+/media/
+
+# Virtual environment
+venv/
+env/
+*.env
+
+# Secret keys and sensitive information
+*.secret_key
+*.settings
+
+# Development specific
+local_settings.py
+
+# IDE-specific files
+.idea/
+.vscode/
