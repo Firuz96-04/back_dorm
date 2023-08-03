@@ -6,7 +6,6 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
-
 # Create your models here.
 from ant_back import settings
 
@@ -204,11 +203,26 @@ class Booking(models.Model):
     room = models.ForeignKey(Room, on_delete=models.PROTECT)
     book_date = models.DateField(default=curr_date)
     privilege = models.ForeignKey(Privilege, on_delete=models.PROTECT)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payed = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, blank=True)
 
     class Meta:
         db_table = 'booking'
+
+
+class Payment(models.Model):
+    id = models.AutoField(primary_key=True)
+    booking = models.ForeignKey(Booking, on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_info = models.CharField(max_length=50, blank=True)
+    comment = models.TextField(blank=True)
+    payment_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'payment'
 
 
 class TestBooking(models.Model):
@@ -224,9 +238,3 @@ class TestBooking(models.Model):
 
     class Meta:
         db_table = 'test_book'
-
-
-class Payment(models.Model):
-    test_book = models.ForeignKey(TestBooking, on_delete=models.CASCADE)
-    money = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    pay_date = models.DateField()

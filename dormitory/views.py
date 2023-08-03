@@ -2,6 +2,7 @@ import datetime
 
 from django.contrib.auth import authenticate
 from django.db.models import Count, Sum
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework import mixins, viewsets, generics
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -164,7 +165,7 @@ class BookView(mixins.ListModelMixin,
                mixins.DestroyModelMixin,
                viewsets.GenericViewSet):
     serializer_class = serializers.BookSerializer
-
+    # parser_classes = (FormParser, MultiPartParser)
     def get_queryset(self):
         return Booking.objects.select_related('room__building', 'student__country', 'student__faculty',
                                               'user').order_by('created_at')
@@ -175,13 +176,15 @@ class BookView(mixins.ListModelMixin,
         return Response({'data': serial})
 
     def create(self, request, *args, **kwargs):
-        print(self.request.user)
+
         book = serializers.BookSerializer(data=request.data)
-        # book_ser = BookingService()
-        # book_ser.add_count(request.data['room'])
         book.is_valid(raise_exception=True)
-        book.save(user=self.request.user)
-        return Response({'data': book.data})
+        # book.save()
+        book_ser = BookingService()
+        nb = book_ser.add_student(book.validated_data)
+
+        return Response({'data': 'nb'})
+
 
     def update(self, request, *args, **kwargs):
         sana = datetime.date(2024, 6, 13)

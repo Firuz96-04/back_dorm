@@ -212,7 +212,7 @@ class StudentSerializer(ModelSerializer):
 
 class BookSerializer(ModelSerializer):
     created_at = serializers.DateTimeField(format="%d.%m.%Y", required=False)
-    user = serializers.CharField(read_only=True)
+    # user = serializers.CharField(read_only=True)
 
     class Meta:
         model = Booking
@@ -230,7 +230,7 @@ class BookSerializer(ModelSerializer):
         return data
 
     def to_representation(self, instance):
-        response = super(BookSerializer, self).to_representation(instance)
+        response = super().to_representation(instance)
         response['room'] = BookRoomSerializer(instance.room).data
         response['student'] = BookStudentSerializer(instance.student).data
         return response
