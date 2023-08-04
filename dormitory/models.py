@@ -202,6 +202,7 @@ class Booking(models.Model):
     student = models.ForeignKey(Student, on_delete=models.PROTECT)
     room = models.ForeignKey(Room, on_delete=models.PROTECT)
     book_date = models.DateField(default=curr_date)
+    book_end = models.DateField(default=curr_date)
     privilege = models.ForeignKey(Privilege, on_delete=models.PROTECT)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payed = models.DecimalField(max_digits=12, decimal_places=2, default=0)

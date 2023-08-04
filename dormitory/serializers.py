@@ -216,7 +216,7 @@ class BookSerializer(ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = ('student', 'room', 'privilege', 'user', 'created_at')
+        fields = ('student', 'room', 'privilege', 'user', 'total_price', 'book_date', 'book_end', 'created_at')
 
     def validate(self, data):
         errors = []
@@ -231,8 +231,11 @@ class BookSerializer(ModelSerializer):
 
     def to_representation(self, instance):
         response = super().to_representation(instance)
-        response['room'] = BookRoomSerializer(instance.room).data
-        response['student'] = BookStudentSerializer(instance.student).data
+        print(response, 'response')
+        print(response['room'])
+        print(instance['room'])
+        response['room'] = BookRoomSerializer(instance['room']).data
+        # response['student'] = BookStudentSerializer(instance.student).data
         return response
 
 

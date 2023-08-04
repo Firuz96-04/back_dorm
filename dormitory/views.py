@@ -172,7 +172,6 @@ class BookView(mixins.ListModelMixin,
 
     def list(self, request, *args, **kwargs):
         serial = serializers.BookSerializer(self.get_queryset(), many=True).data
-        # serial.append('message')
         return Response({'data': serial})
 
     def create(self, request, *args, **kwargs):
@@ -182,9 +181,8 @@ class BookView(mixins.ListModelMixin,
         # book.save()
         book_ser = BookingService()
         nb = book_ser.add_student(book.validated_data)
-
-        return Response({'data': 'nb'})
-
+        print(nb, 'result')
+        return Response({'data': book.data})
 
     def update(self, request, *args, **kwargs):
         sana = datetime.date(2024, 6, 13)
