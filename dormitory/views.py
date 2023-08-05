@@ -166,6 +166,11 @@ class BookView(mixins.ListModelMixin,
                viewsets.GenericViewSet):
     serializer_class = serializers.BookSerializer
     # parser_classes = (FormParser, MultiPartParser)
+
+    def perform_create(self, serializer):
+        print(self.request.user.id, 'iddddddddddddddddddddddddd')
+        serializer.save()
+
     def get_queryset(self):
         return Booking.objects.select_related('room__building', 'student__country', 'student__faculty',
                                               'user').order_by('created_at')
@@ -178,11 +183,10 @@ class BookView(mixins.ListModelMixin,
 
         book = serializers.BookSerializer(data=request.data)
         book.is_valid(raise_exception=True)
-        # book.save()
-        book_ser = BookingService()
-        nb = book_ser.add_student(book.validated_data)
-        print(nb, 'result')
-        return Response({'data': book.data})
+        nb = BookingService.add_student(book.validated_data, self.request.user.id)
+        bg = serializers.BookSerializer(nb)
+
+        return Response({'data': bg.data})
 
     def update(self, request, *args, **kwargs):
         sana = datetime.date(2024, 6, 13)
