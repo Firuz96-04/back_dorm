@@ -328,3 +328,7 @@ class CatApi(mixins.ListModelMixin, generics.GenericAPIView):
             'country': country.data,
             'student_type': student_type.data
         }})
+
+
+def test_message():
+    print('message')
