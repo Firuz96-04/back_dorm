@@ -10,12 +10,39 @@ class BookingService:
     @staticmethod
     def add_student(book, user):
         start_month = book['book_date']
-        end_month = book['book_end']
+        privilege = book['privilege']
+        # end_month = book['book_end']
         end_month_default = datetime.date(2024, 7, 30)
-        date = end_month_default - start_month # days
-        diff_month = date.days // 30 # month
-        total_price = book['student'].student_type.price * diff_month
+        if privilege is None:
+            date = end_month_default - start_month  # days
+            diff_month = date.days // 30  # month
+            total_price = book['student'].student_type.price * diff_month
+        else:
+            total_price = 0
 
         book_data = Booking(**book, total_price=total_price, user_id=user)
-        book_data.save()
-        return book_data
+
+        room = Room.objects.get(pk=book['room'].id)
+        if room.person_count != room.room_type.place:
+            room.person_count += 1
+            room.save()
+            book_data.save()
+            if room.person_count == room.room_type.place:
+                room.is_full = 1
+                room.save()
+            return room
+        else:
+            raise ValidationError({'room': 'this room is full'})
+        # book_data.save()  # works with signals
+        #
+        # try:
+        #     book_data.save()
+        #     if book_data.id is not None:
+        #         room = Room.objects.get(pk=book_data.room.id)
+        #         if room.person_count != room.room_type.place:
+        #             room.person_count += 1
+        #             room.save()
+        #         else:
+        #             raise ValidationError({'room': 'this room is full'})
+        # except Exception as e:
+        #     print('not savee')

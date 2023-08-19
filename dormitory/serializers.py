@@ -120,14 +120,16 @@ class BookRoomSerializer(Serializer):
     number = serializers.CharField()
     floor = serializers.IntegerField()
     building = serializers.CharField(source='building.name')
+    building_id = serializers.IntegerField(source='building.id')
 
 
 class BookStudentSerializer(Serializer):
     id = serializers.IntegerField()
     full_name = serializers.SerializerMethodField(method_name='get_full_name')
+    course = serializers.CharField(max_length=1)
     faculty = FacultySerializer()
     country = CountrySerializer()
-    gender = serializers.CharField()
+    gender = serializers.CharField(max_length=1)
 
     def get_full_name(self, obj):
         return f'{obj.name} {obj.last_name}'
@@ -183,13 +185,12 @@ class StudentTypeSerializer(ModelSerializer):
 
 class StudentSerializer(ModelSerializer):
     user = serializers.CharField(read_only=True)
-
-    # born_n = serializers.DateField(format='%Y-%m-%d')
+    created_at = serializers.DateTimeField(format='%Y-%m-%d %H:%M', read_only=True)
 
     class Meta:
         model = Student
         fields = ('id', 'name', 'last_name', 'country', 'phone', 'born', 'address',
-                  'gender', 'student_type', 'faculty', 'course', 'user')
+                  'gender', 'student_type', 'faculty', 'course', 'user', 'created_at')
 
     def validate(self, data):
         errors = []
@@ -232,11 +233,33 @@ class BookSerializer(ModelSerializer):
 
     def to_representation(self, instance):
         response = super().to_representation(instance)
-        # print(response, 'response')
-        # print(response['room'])
-        # print(instance['room'])
         response['room'] = BookRoomSerializer(instance.room).data
         response['student'] = BookStudentSerializer(instance.student).data
+        return response
+
+
+class FreeBookSerializer(ModelSerializer):
+    # created_at = serializers.DateTimeField(format="%d.%m.%Y %H:%M", required=False)
+    user = serializers.CharField(read_only=True, required=False)
+
+    class Meta:
+        model = Booking
+        fields = ('student', 'room', 'privilege', 'user', 'created_at')
+
+    def validate(self, data):
+        errors = []
+        book = Booking.objects.filter(student=data['student'])
+
+        if book:
+            errors.append({'student': 'student exists'})
+
+        if errors:
+            raise ValidationError({'errors': errors})
+        return data
+
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+        # response['room'] = BookRoomSerializer(instance.room).data
         return response
 
 
@@ -254,3 +277,39 @@ class PrivilegeSerializer(ModelSerializer):
         if errors:
             raise APIException({'error': errors})
         return data
+
+
+class FreePlaceSerializer(Serializer):
+    room_id = serializers.IntegerField(source='id')
+    number = serializers.CharField()
+    floor = serializers.IntegerField()
+    building = serializers.CharField(source='building__name')
+    building_id = serializers.IntegerField()
+    is_full = serializers.BooleanField()
+    room_place = serializers.IntegerField(source='room_type__place')
+    person_count = serializers.IntegerField()
+    free_place = serializers.IntegerField()
+
+
+class FreeAddPlaceSerializer(Serializer):
+    room_id = serializers.IntegerField(source='id')
+    number = serializers.CharField()
+    floor = serializers.IntegerField()
+    building = serializers.CharField()
+    building_id = serializers.IntegerField()
+    is_full = serializers.BooleanField()
+    room_place = serializers.IntegerField(source='room_type.place')
+    person_count = serializers.IntegerField()
+    free_place = serializers.SerializerMethodField(method_name='get_free_place')
+
+    def get_free_place(self, obj):
+        total = obj.room_type.place - obj.person_count
+        return total
+
+
+class FreeStudentSearch(Serializer):
+    id = serializers.IntegerField()
+    full_name = serializers.SerializerMethodField()
+
+    def get_full_name(self, obj):
+        return f'{obj["name"]} {obj["last_name"]}'
