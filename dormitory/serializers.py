@@ -214,11 +214,16 @@ class StudentSerializer(ModelSerializer):
 class BookSerializer(ModelSerializer):
     created_at = serializers.DateTimeField(format="%d.%m.%Y %H:%M", required=False)
     user = serializers.CharField(read_only=True, required=False)
+    debt = serializers.SerializerMethodField(method_name='get_debt')
 
     class Meta:
         model = Booking
         fields = ('student', 'room', 'privilege', 'user', 'total_price',
-                  'payed', 'book_date', 'book_end', 'created_at')
+                  'payed', 'debt', 'book_date', 'book_end', 'created_at')
+
+    def get_debt(self, obj):
+        total_debt = obj.total_price - obj.payed
+        return str(total_debt)
 
     def validate(self, data):
         errors = []

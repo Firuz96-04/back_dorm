@@ -16,9 +16,6 @@ router.register(r'booking', BookView, basename='booking')
 router.register(r'free-place', FreePlaceApi, basename='free-place')
 router.register(r'student-type', StudentTypeApi, basename='student-type')
 
-
-
-
 router.register(r'privilege', PrivilegeView, basename='privilege')
 
 
