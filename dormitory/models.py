@@ -5,7 +5,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
-
+from imagekit.models import ProcessedImageField
+from .utils import upload_photo
 # Create your models here.
 from ant_back import settings
 
@@ -160,6 +161,10 @@ class Room(models.Model):
 
 
 class Student(models.Model):
+    GENDER_CHOICE = (
+        ('0', 'женшина'),
+        ('1', 'мужчина'),
+    )
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=30, blank=True)
@@ -167,7 +172,8 @@ class Student(models.Model):
     born = models.DateField()
     course = models.CharField(max_length=1, default=1)
     address = models.CharField(max_length=100, blank=True)
-    gender = models.CharField(max_length=1)
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICE)
+    photo = ProcessedImageField(upload_to=upload_photo, blank=True, null=True)
     country = models.ForeignKey(Country, on_delete=models.CASCADE)
     nationality = models.CharField(max_length=20, blank=True)
     student_type = models.ForeignKey(StudentType, on_delete=models.CASCADE)

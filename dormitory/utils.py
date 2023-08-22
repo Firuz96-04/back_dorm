@@ -2,6 +2,24 @@ from abc import ABC
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
+import os
+from datetime import date
+import uuid
+
+
+def upload_path(prefix, instance, filename):
+    ext = filename.split('.')[-1]
+    today = date.today().strftime('%Y/%m/%d')
+    filename = f'{uuid.uuid4().hex[:16]}.{ext}'
+    return '{prefix}/{today}/{filename}'.format(
+        prefix=prefix,
+        today=today,
+        filename=filename)
+
+
+def upload_photo(instance, filename):
+    return upload_path('student/diploma', instance, filename)
+
 
 class CustomPagination(PageNumberPagination, ABC):
     page_size = 10

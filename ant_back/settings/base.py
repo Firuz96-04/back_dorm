@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework_simplejwt',
     'debug_toolbar',
+    'imagekit',
     'django_filters',
     'dormitory.apps.DormitoryConfig',
     'accounts.apps.AccountsConfig',
