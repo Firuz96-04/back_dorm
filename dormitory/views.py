@@ -15,7 +15,7 @@ from .utils import CustomPagination
 from rest_framework.permissions import IsAuthenticated
 from .services.booking import BookingService
 from django_filters import rest_framework as filters
-from .filters import StudentFilter, FreeRoomFilter, BookFilter
+from .filters import StudentFilter, FreeRoomFilter, BookFilter, RoomFilter
 
 
 # from datetime import datetime
@@ -85,8 +85,8 @@ class CountryView(mixins.ListModelMixin,
 
 
 class StudentTypeApi(mixins.ListModelMixin,
-                      mixins.CreateModelMixin,
-                      viewsets.GenericViewSet):
+                     mixins.CreateModelMixin,
+                     viewsets.GenericViewSet):
     queryset = StudentType.objects.all()
     serializer_class = serializers.StudentTypeSerializer
 
@@ -149,6 +149,8 @@ class RoomView(mixins.ListModelMixin,
     serializer_class = serializers.RoomSerializer
     pagination_class = CustomPagination
     permission_classes = (IsAuthenticated,)
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = RoomFilter
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -201,6 +203,7 @@ class BookView(mixins.ListModelMixin,
     serializer_class = serializers.BookSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = BookFilter
+
     # parser_classes = (FormParser, MultiPartParser)
 
     def perform_create(self, serializer):
@@ -309,12 +312,31 @@ class FreePlaceApi(mixins.ListModelMixin,
 
 
 class FilterStudentApi(mixins.ListModelMixin,
-                        viewsets.GenericViewSet):
+                       viewsets.GenericViewSet):
     # queryset =
 
     @action(methods=['get'], detail=False)
     def student(self, request):
         return Response({'message': 'Ok'})
+
+
+class MainDormitoryApi(mixins.ListModelMixin, generics.GenericAPIView):
+
+    def get(self, request, *args, **kwargs):
+        query = Building.objects.annotate(
+            total_rooms=Count('room__id', distinct=True),
+            busy_rooms=Count('room', filter=Q(room__is_full=True), distinct=True),
+            free_rooms=F('total_rooms') - F('busy_rooms'),
+            women=Count('room', filter=Q(room__booking__student__gender='0')),
+            men=Count('room', filter=Q(room__booking__student__gender='1')),
+            build_name=F('name'),
+            build_id=F('id'),
+            floor_size=F('floor_count'),
+            all_student=Count('room__booking__student__id', distinct=True),
+        ).values('build_name', 'build_id', 'floor_size', 'total_rooms', 'busy_rooms', 'free_rooms',
+                 'all_student', 'men', 'women')
+        serial = serializers.MainDormitorySerializer(query, many=True)
+        return Response({'data': serial.data})
 
 
 class CatApi(mixins.ListModelMixin, generics.GenericAPIView):

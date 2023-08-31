@@ -49,3 +49,12 @@ class BookFilter(filters.FilterSet):
 
     def full_name(self, queryset, name, value):
         return queryset.filter(Q(student__name__istartswith=value) | Q(student__last_name__istartswith=value))
+
+
+class RoomFilter(filters.FilterSet):
+    room = filters.NumberFilter(field_name='number', lookup_expr='startswith')
+    building = filters.NumberFilter()
+
+    class Meta:
+        model = Room
+        fields = ('room', 'building')

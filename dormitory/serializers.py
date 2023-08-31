@@ -1,3 +1,5 @@
+from abc import ABC
+
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer, Serializer
@@ -313,8 +315,22 @@ class FreeAddPlaceSerializer(Serializer):
 
 
 class FreeStudentSearch(Serializer):
-    id = serializers.IntegerField()
-    full_name = serializers.SerializerMethodField()
+    code = serializers.IntegerField(source="id")
+    name = serializers.SerializerMethodField(method_name="get_full_name")
 
     def get_full_name(self, obj):
         return f'{obj["name"]} {obj["last_name"]}'
+
+
+class MainDormitorySerializer(Serializer):
+    total_rooms = serializers.IntegerField()
+    busy_rooms = serializers.IntegerField()
+    free_rooms = serializers.IntegerField()
+    women = serializers.IntegerField()
+    men = serializers.IntegerField()
+    all_student = serializers.IntegerField()
+    build_name = serializers.CharField()
+    build_id = serializers.IntegerField()
+    floor_size = serializers.IntegerField()
+
+    pass
