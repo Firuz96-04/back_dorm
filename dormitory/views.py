@@ -2,6 +2,7 @@ import datetime
 
 from django.contrib.auth import authenticate
 from django.db.models import Count, Sum, F, Exists, OuterRef, Q
+from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework import mixins, viewsets, generics
@@ -83,6 +84,15 @@ class CountryView(mixins.ListModelMixin,
         return Response({'data': serial.data, 'totals': {'book_total': totals['book_total'],
                                                          'student_total': totals['student_total']}})
 
+    def destroy(self, request, *args, **kwargs):
+        item_id = kwargs.get('pk')
+        try:
+            country = get_object_or_404(Country, pk=item_id)
+            country.delete()
+            return Response({'message': 'deleted'})
+        except Exception as e:
+            return Response({'message': 'error'})
+
 
 class StudentTypeApi(mixins.ListModelMixin,
                      mixins.CreateModelMixin,
@@ -121,6 +131,15 @@ class FacultyView(mixins.ListModelMixin,
         return Response({'data': serial.data, 'totals': {'book_total': totals['book_total'],
                                                          'student_total': totals['student_total']}})
 
+    def destroy(self, request, *args, **kwargs):
+        item_id = kwargs.get('pk')
+        try:
+            faculty = get_object_or_404(Faculty, pk=item_id)
+            faculty.delete()
+            return Response({'message': 'deleted'})
+        except Exception as e:
+            return Response({'message': 'error'})
+
 
 class BuildingView(mixins.ListModelMixin,
                    mixins.CreateModelMixin,
@@ -154,6 +173,23 @@ class RoomView(mixins.ListModelMixin,
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        room_id = kwargs.get('pk')
+        room = get_object_or_404(Room, pk=room_id)
+        serial = serializers.RoomEditSerializer(room, request.data, partial=True)
+        serial.is_valid(raise_exception=True)
+        serial.save()
+        return Response({'data': serial.data})
+
+    def destroy(self, request, *args, **kwargs):
+        room_id = kwargs.get('pk')
+        try:
+            room = get_object_or_404(Room, pk=room_id)
+            room.delete()
+            return Response({'message': 'deleted'})
+        except Exception as e:
+            return Response({'message': 'error'})
 
 
 class StudentView(mixins.ListModelMixin,

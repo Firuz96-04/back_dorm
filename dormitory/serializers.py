@@ -158,24 +158,40 @@ class RoomSerializer(ModelSerializer):
                   'is_full', 'user', 'description')
 
     def validate(self, data):
-        errors = []
         room = Room.objects.filter(number=data['number'], building_id=data['building'])
         if room:
-            errors.append({'room': 'this room exist'})
-        if errors:
-            raise ValidationError({'errors': errors})
+            raise APIException({'room': 'this room is exists'})
         return data
 
     def to_representation(self, instance):
         building = BuildingSimpleSerializer(instance.building).data
         response = super().to_representation(instance)
-
         response['room_type'] = RoomTypeSerializer(instance.room_type).data
         response['building_name'] = building['name']
         response['building_floor_count'] = building['floor_count']
+        return response
 
-        # response['building_'] = BuildingSimpleSerializer(instance.building).data
 
+class RoomEditSerializer(ModelSerializer):
+    # user = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Room
+        fields = ('id', 'number', 'floor', 'room_type', 'building', 'description')
+
+    def validate(self, data):
+        print(data)
+        # room = Room.objects.filter(number=data['number'], building_id=data['building'])
+        # if room:
+        #     raise APIException({'room': 'this room is exists'})
+        return data
+
+    def to_representation(self, instance):
+        building = BuildingSimpleSerializer(instance.building).data
+        response = super().to_representation(instance)
+        response['room_type'] = RoomTypeSerializer(instance.room_type).data
+        response['building_name'] = building['name']
+        response['building_floor_count'] = building['floor_count']
         return response
 
 
