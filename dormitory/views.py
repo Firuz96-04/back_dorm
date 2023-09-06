@@ -238,6 +238,7 @@ class BookView(mixins.ListModelMixin,
                viewsets.GenericViewSet):
     serializer_class = serializers.BookSerializer
     filter_backends = (filters.DjangoFilterBackend,)
+    pagination_class = CustomPagination
     filterset_class = BookFilter
 
     # parser_classes = (FormParser, MultiPartParser)
@@ -251,8 +252,20 @@ class BookView(mixins.ListModelMixin,
 
     def list(self, request, *args, **kwargs):
         query = self.filter_queryset(self.get_queryset())
-        serial = serializers.BookSerializer(query, many=True).data
-        return Response({'data': serial})
+        page = self.paginate_queryset(query)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            result = self.get_paginated_response(serializer.data)
+            data = result.data  # pagination data
+        else:
+            serializer = self.get_serializer(query, many=True)
+            data = serializer.data
+        return Response(data)
+
+    # def list(self, request, *args, **kwargs):
+    #     query = self.filter_queryset(self.get_queryset())
+    #     serial = serializers.BookSerializer(query, many=True).data
+    #     return Response({'data': serial})
 
     def create(self, request, *args, **kwargs):
         book = serializers.BookSerializer(data=request.data)
