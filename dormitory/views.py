@@ -317,7 +317,7 @@ class FreePlaceApi(mixins.ListModelMixin,
         free = Room.objects.select_related('building').annotate(
             free_place=F('room_type__place') - F('person_count')
         ).values('id', 'number', 'building__name', 'building_id', 'is_full', 'floor', 'room_type__place',
-                 'person_count', 'free_place').order_by('-id')
+                 'person_count', 'free_place').order_by('building_id', 'number', 'is_full')
         query = self.filter_queryset(free)
         page = self.paginate_queryset(query)
         if page is not None:
@@ -340,7 +340,7 @@ class FreePlaceApi(mixins.ListModelMixin,
             students = Student.objects.annotate(
                 has_booking=Exists(Booking.objects.filter(student_id=OuterRef('pk')))
             ).filter(has_booking=False).values('id', 'name', 'last_name')
-            student = students.filter(Q(name__startswith=query) | Q(last_name__startswith=query))
+            student = students.filter(Q(name__startswith=query) | Q(last_name__startswith=query))[:4]
             serial = serializers.FreeStudentSearch(student, many=True)
             return Response({'data': serial.data})
         else:
