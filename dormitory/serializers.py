@@ -129,9 +129,11 @@ class BookStudentSerializer(Serializer):
     id = serializers.IntegerField()
     full_name = serializers.SerializerMethodField(method_name='get_full_name')
     course = serializers.CharField(max_length=1)
+    student_type = serializers.CharField(source='student_type.type')
     faculty = FacultySerializer()
     country = CountrySerializer()
     gender = serializers.CharField(max_length=1)
+
 
     def get_full_name(self, obj):
         return f'{obj.name} {obj.last_name}'
