@@ -330,7 +330,7 @@ class FreePlaceApi(mixins.ListModelMixin,
         free = Room.objects.select_related('building').annotate(
             free_place=F('room_type__place') - F('person_count')
         ).values('id', 'number', 'building__name', 'building_id', 'is_full', 'floor', 'room_type__place',
-                 'person_count', 'free_place').order_by('building_id', 'number', 'is_full')
+                 'person_count', 'free_place', 'room_gender').order_by('building_id', 'number', 'is_full')
         query = self.filter_queryset(free)
         page = self.paginate_queryset(query)
         if page is not None:

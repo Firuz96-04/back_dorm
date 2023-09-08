@@ -123,6 +123,7 @@ class BookRoomSerializer(Serializer):
     floor = serializers.IntegerField()
     building = serializers.CharField(source='building.name')
     building_id = serializers.IntegerField(source='building.id')
+    room_gender = serializers.CharField()
 
 
 class BookStudentSerializer(Serializer):
@@ -314,7 +315,7 @@ class FreePlaceSerializer(Serializer):
     room_place = serializers.IntegerField(source='room_type__place')
     person_count = serializers.IntegerField()
     free_place = serializers.IntegerField()
-
+    room_gender = serializers.CharField()
 
 class FreeAddPlaceSerializer(Serializer):
     room_id = serializers.IntegerField(source='id')
@@ -326,6 +327,7 @@ class FreeAddPlaceSerializer(Serializer):
     room_place = serializers.IntegerField(source='room_type.place')
     person_count = serializers.IntegerField()
     free_place = serializers.SerializerMethodField(method_name='get_free_place')
+    room_gender = serializers.CharField()
 
     def get_free_place(self, obj):
         total = obj.room_type.place - obj.person_count

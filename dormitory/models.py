@@ -142,6 +142,12 @@ class RoomType(models.Model):
 
 
 class Room(models.Model):
+    ROOM_GENDER = (
+        ('0', 'empty'),
+        ('1', 'man'),
+        ('2', 'woman'),
+    )
+
     id = models.SmallAutoField(primary_key=True)
     number = models.CharField(max_length=4)
     floor = models.PositiveSmallIntegerField()
@@ -151,6 +157,7 @@ class Room(models.Model):
     description = models.CharField(max_length=128, blank=True)
     person_count = models.SmallIntegerField(default=0)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    room_gender = models.CharField(max_length=1, choices=ROOM_GENDER, default='0')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

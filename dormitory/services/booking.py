@@ -1,6 +1,6 @@
 import datetime
 
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, APIException
 from dormitory.models import Room, RoomType
 from dormitory.models import Booking
 
@@ -9,6 +9,7 @@ class BookingService:
 
     @staticmethod
     def add_student(book, user):
+
         start_month = book['book_date']
         privilege = book['privilege']
         # end_month = book['book_end']
@@ -21,7 +22,6 @@ class BookingService:
             total_price = 0
 
         book_data = Booking(**book, total_price=total_price, user_id=user)
-
         room = Room.objects.get(pk=book['room'].id)
         if room.person_count != room.room_type.place:
             room.person_count += 1
@@ -30,9 +30,15 @@ class BookingService:
             if room.person_count == room.room_type.place:
                 room.is_full = 1
                 room.save()
-            return room
+                return room
         else:
-            raise ValidationError({'room': 'this room is full'})
+            raise APIException({'room': 'this room is full'})
+
+
+
+        # if room.room_gender == '0':
+        #     room.room_gender =
+
         # book_data.save()  # works with signals
         #
         # try:
