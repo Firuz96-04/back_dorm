@@ -111,6 +111,28 @@ class BuildingSerializer(ModelSerializer):
         return response
 
 
+class BuildingEditSerializer(ModelSerializer):
+    class Meta:
+        model = Building
+        fields = ('id', 'name', 'address', 'principal', 'floor_count', 'description')
+
+    def validate(self, data):
+        name = data.get('name')
+        if name is not None:
+            print('eee')
+            # building = Building.objects.filter(name__iexact=name)
+            # if building:
+            #     print('building')
+            raise APIException({'building': f'this {name} is exists'})
+        return data
+
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+        response['principal'] = PrincipalSerializer(instance.principal).data
+
+        return response
+
+
 class BuildingSimpleSerializer(Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
@@ -134,7 +156,6 @@ class BookStudentSerializer(Serializer):
     faculty = FacultySerializer()
     country = CountrySerializer()
     gender = serializers.CharField(max_length=1)
-
 
     def get_full_name(self, obj):
         return f'{obj.name} {obj.last_name}'
@@ -249,9 +270,22 @@ class BookSerializer(ModelSerializer):
     def validate(self, data):
         errors = []
         book = Booking.objects.filter(student=data['student'])
+        print(data['student'].gender)
+        print(data['room'].room_gender, 'room')
 
         if book:
             errors.append({'student': 'student exists'})
+
+        if data['room'].room_gender == '2':
+            pass
+        else:
+            if data['room'].room_gender != data['student'].gender:
+                if data['room'].room_gender == '0':
+                    raise APIException({'gender': 'only woman'})
+                else:
+                    raise APIException({'gender': 'only man'})
+            else:
+                pass
 
         if errors:
             raise ValidationError({'errors': errors})
@@ -317,6 +351,7 @@ class FreePlaceSerializer(Serializer):
     free_place = serializers.IntegerField()
     room_gender = serializers.CharField()
 
+
 class FreeAddPlaceSerializer(Serializer):
     room_id = serializers.IntegerField(source='id')
     number = serializers.CharField()
@@ -352,5 +387,3 @@ class MainDormitorySerializer(Serializer):
     build_name = serializers.CharField()
     build_id = serializers.IntegerField()
     floor_size = serializers.IntegerField()
-
-    pass

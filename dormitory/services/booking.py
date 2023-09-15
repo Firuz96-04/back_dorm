@@ -30,11 +30,14 @@ class BookingService:
             if room.person_count == room.room_type.place:
                 room.is_full = 1
                 room.save()
-                return room
+            if room.room_gender == '2':
+                print('choose gender')
+                room.room_gender = book_data.student.gender
+                room.save()
         else:
             raise APIException({'room': 'this room is full'})
 
-
+        return room
 
         # if room.room_gender == '0':
         #     room.room_gender =

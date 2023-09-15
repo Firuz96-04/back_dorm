@@ -1,10 +1,11 @@
 import datetime
 
 from django.contrib.auth import authenticate
-from django.db.models import Count, Sum, F, Exists, OuterRef, Q
+from django.db.models import Count, Sum, F, Exists, OuterRef, Q, ProtectedError
 from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework import mixins, viewsets, generics
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -17,8 +18,7 @@ from rest_framework.permissions import IsAuthenticated
 from .services.booking import BookingService
 from django_filters import rest_framework as filters
 from .filters import StudentFilter, FreeRoomFilter, BookFilter, RoomFilter
-
-
+from .utils import export_to_excel
 # from datetime import datetime
 
 
@@ -89,9 +89,9 @@ class CountryView(mixins.ListModelMixin,
         try:
             country = get_object_or_404(Country, pk=item_id)
             country.delete()
-            return Response({'message': 'deleted'})
-        except Exception as e:
-            return Response({'message': 'error'})
+            return Response({'data': country.name}, status=status.HTTP_204_NO_CONTENT)
+        except ProtectedError as e:
+            return Response({'data': 'error'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class StudentTypeApi(mixins.ListModelMixin,
@@ -118,7 +118,7 @@ class FacultyView(mixins.ListModelMixin,
                   viewsets.GenericViewSet):
     queryset = Faculty.objects.all()
     serializer_class = serializers.FacultySerializer
-    permission_classes = (IsAuthenticated,)
+    # permission_classes = (IsAuthenticated,)
 
     @action(methods=['get'], detail=False)
     def total(self, request, *args, **kwargs):
@@ -131,14 +131,24 @@ class FacultyView(mixins.ListModelMixin,
         return Response({'data': serial.data, 'totals': {'book_total': totals['book_total'],
                                                          'student_total': totals['student_total']}})
 
+    @action(methods=['get'], detail=False)
+    def export(self, request, *args, **kwargs):
+        faculty = Faculty.objects.annotate(
+            booking_count=Count('student__booking'),
+            student_count=Count('student__id'),
+        )
+        totals = faculty.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
+        return export_to_excel.export_data(faculty, totals, 'faculty')
+
+
     def destroy(self, request, *args, **kwargs):
         item_id = kwargs.get('pk')
         try:
             faculty = get_object_or_404(Faculty, pk=item_id)
             faculty.delete()
-            return Response({'message': 'deleted'})
-        except Exception as e:
-            return Response({'message': 'error'})
+            return Response({'data': faculty.name}, status=status.HTTP_204_NO_CONTENT)
+        except ProtectedError as e:
+            return Response({'data': 'error'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BuildingView(mixins.ListModelMixin,
@@ -146,8 +156,26 @@ class BuildingView(mixins.ListModelMixin,
                    mixins.UpdateModelMixin,
                    mixins.DestroyModelMixin,
                    viewsets.GenericViewSet):
-    queryset = Building.objects.all()
+    queryset = Building.objects.select_related('principal')
     serializer_class = serializers.BuildingSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def update(self, request, *args, **kwargs):
+        build_id = kwargs.get('pk')
+        build = get_object_or_404(Building, pk=build_id)
+        serial = serializers.BuildingEditSerializer(build, request.data, partial=True)
+        serial.is_valid(raise_exception=True)
+        serial.save()
+        return Response({'data': serial.data}, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        build_id = kwargs.get('pk')
+        try:
+            building = get_object_or_404(Building, pk=build_id)
+            building.delete()
+            return Response({'data': building.name, 'status': 'success'}, status=status.HTTP_200_OK)
+        except ProtectedError as e:
+            return Response({'data': 'error'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class RoomTypeView(mixins.ListModelMixin,
@@ -262,11 +290,6 @@ class BookView(mixins.ListModelMixin,
             data = serializer.data
         return Response(data)
 
-    # def list(self, request, *args, **kwargs):
-    #     query = self.filter_queryset(self.get_queryset())
-    #     serial = serializers.BookSerializer(query, many=True).data
-    #     return Response({'data': serial})
-
     def create(self, request, *args, **kwargs):
         book = serializers.BookSerializer(data=request.data)
         book.is_valid(raise_exception=True)
@@ -313,18 +336,6 @@ class FreePlaceApi(mixins.ListModelMixin,
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = FreeRoomFilter
     pagination_class = CustomPagination
-
-    # def list(self, request, *args, **kwargs):
-    #     student = self.filter_queryset(self.get_queryset())
-    #     page = self.paginate_queryset(student)
-    #     if page is not None:
-    #         serializer = self.get_serializer(page, many=True)
-    #         result = self.get_paginated_response(serializer.data)
-    #         data = result.data  # pagination data
-    #     else:
-    #         serializer = self.get_serializer(student, many=True)
-    #         data = serializer.data
-    #     return Response(data)
 
     def list(self, request, *args, **kwargs):
         free = Room.objects.select_related('building').annotate(
@@ -400,6 +411,3 @@ class CatApi(mixins.ListModelMixin, generics.GenericAPIView):
             'student_type': student_type.data
         }})
 
-
-def test_message():
-    print('message')
