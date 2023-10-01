@@ -21,7 +21,7 @@ def upload_photo(instance, filename):
 
 
 class CustomPagination(PageNumberPagination, ABC):
-    page_size = 25
+    page_size = 20
     max_page_size = 100
     page_size_query_param = 'page_size'
 
@@ -41,7 +41,8 @@ class CustomPagination(PageNumberPagination, ABC):
                 'current_page_number': self.page.number,
                 'total_pages': self.page.paginator.num_pages,
             },
-            'results': data
+            'results': data,
+            # 'total_sum': 3500
         })
 
         # 'links': {

@@ -6,7 +6,7 @@ def validate_building(data):
     errors = []
     building = Building.objects.filter(name__iexact=data['name'])
     if building:
-        errors.append({'building': 'exists'})
+        errors.append(f'{data["name"]} уже добавлено')
     return errors
 
 
@@ -23,7 +23,7 @@ def validate_faculty(data):
     errors = []
     faculty = Faculty.objects.filter(name__iexact=data['name'])
     if faculty:
-        errors.append({'name': 'exists'})
+        errors.append(f'{data["name"]} уже добавлено')
     return errors
 
 
@@ -37,9 +37,9 @@ def validate_principal(data):
 
 def validate_city_country(data, object):
     errors = []
-    principal = object.objects.filter(name__iexact=data['name'])
-    if principal:
-        errors.append({'name': 'exists'})
+    country = object.objects.filter(name__iexact=data['name'])
+    if country:
+        errors.append(f'{data["name"]} уже добавлено')
     return errors
 
 

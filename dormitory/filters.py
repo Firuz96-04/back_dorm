@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Q, F
 from django_filters import rest_framework as filters
 from dormitory.models import Student, Room, Booking
 
@@ -24,10 +24,11 @@ class FreeRoomFilter(filters.FilterSet):
     room = filters.CharFilter(field_name='number', lookup_expr='startswith')
     floor = filters.NumberFilter()
     place = filters.NumberFilter(field_name='free_place')
+    gender = filters.CharFilter(field_name='room_gender')
 
     class Meta:
         model = Room
-        fields = ('building', 'number', 'is_full', 'floor')
+        fields = ('building', 'number', 'is_full', 'floor', 'gender')
 
     # def filter_place(self, queryset, name, value):
     #     print(value, 'value')
@@ -41,20 +42,34 @@ class BookFilter(filters.FilterSet):
     search = filters.CharFilter(method='full_name')
     faculty = filters.NumberFilter(field_name='student__faculty_id')
     gender = filters.CharFilter(field_name='student__gender')
-    privilege = filters.NumberFilter(field_name='privilege')
+    privilege = filters.NumberFilter(method='get_privilege')
+    debt = filters.NumberFilter(method='get_debt')
 
     class Meta:
         model = Booking
-        fields = ('building', 'search', 'privilege', 'faculty', 'gender')
+        fields = ('building', 'search', 'privilege', 'faculty', 'gender', 'debt')
 
     def full_name(self, queryset, name, value):
         return queryset.filter(Q(student__name__istartswith=value) | Q(student__last_name__istartswith=value))
+
+    def get_debt(self, queryset, name, value):
+        if value == 1:
+            return queryset.filter(Q(total_price=F('payed')))
+        else:
+            return queryset.exclude(Q(total_price=F('payed')))
+
+    def get_privilege(self, queryset, name, value):
+        if value == 1:
+            return queryset.filter(Q(privilege_id__isnull=True))
+        else:
+            return queryset.filter(privilege_id__isnull=False)
 
 
 class RoomFilter(filters.FilterSet):
     room = filters.NumberFilter(field_name='number', lookup_expr='startswith')
     building = filters.NumberFilter()
+    gender = filters.CharFilter(field_name='room_gender')
 
     class Meta:
         model = Room
-        fields = ('room', 'building')
+        fields = ('room', 'building', 'gender')

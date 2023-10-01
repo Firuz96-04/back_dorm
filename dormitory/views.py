@@ -19,6 +19,9 @@ from .services.booking import BookingService
 from django_filters import rest_framework as filters
 from .filters import StudentFilter, FreeRoomFilter, BookFilter, RoomFilter
 from .utils import export_to_excel
+import time
+
+
 # from datetime import datetime
 
 
@@ -33,6 +36,44 @@ class ManagerRegisterApi(mixins.CreateModelMixin,
         user.save(role='2')
 
         return Response({'data': user.data})
+
+
+class LoginApi(mixins.CreateModelMixin,
+               generics.GenericAPIView):
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        if not email or not password:
+            return Response({'please add email or password'})
+
+        user = authenticate(email=email, password=password)
+        if user is not None:
+            if user.is_active:
+                # if user.role.id == 3:
+                #     user_data = serializers.StudentLoginSerializer(user.student, many=False,
+                #                                                    context={'request': request})
+                # else:
+                #     user_data = serializers.UserSerializer(user, many=False)
+
+                refresh = RefreshToken.for_user(user)
+                print(user, 'user')
+                # refresh['user_name'] = user.name
+
+                data = {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    # 'user': user_data.data
+                }
+                # return Response({'data': data})
+                return Response(data)
+            return Response({'user': 'user not active'}, status=status.HTTP_400_BAD_REQUEST)
+            # {
+            #                     'message': 'not verified',
+            #                     'verify_status': user.verify_status,
+            #                     'user': user.id,
+            #                     'email': user.email
+        return Response({'error': 'user_not_found'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # class UserRegisterApi(
@@ -77,8 +118,8 @@ class CountryView(mixins.ListModelMixin,
         country = Country.objects.annotate(
             booking_count=Count('student__booking'),
             student_count=Count('student__id'),
-
         )
+
         totals = country.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
         serial = serializers.CountryCounterSerializer(country, many=True)
         return Response({'data': serial.data, 'totals': {'book_total': totals['book_total'],
@@ -91,7 +132,17 @@ class CountryView(mixins.ListModelMixin,
             country.delete()
             return Response({'data': country.name}, status=status.HTTP_204_NO_CONTENT)
         except ProtectedError as e:
-            return Response({'data': 'error'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'data': 'Из этой страны заселены студенты'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=['get'], detail=False)
+    def export(self, request, *args, **kwargs):
+        # time.sleep(1)
+        country = Country.objects.annotate(
+            booking_count=Count('student__booking'),
+            student_count=Count('student__id'),
+        )
+        totals = country.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
+        return export_to_excel.export_data(country, totals, 'country')
 
 
 class StudentTypeApi(mixins.ListModelMixin,
@@ -118,7 +169,7 @@ class FacultyView(mixins.ListModelMixin,
                   viewsets.GenericViewSet):
     queryset = Faculty.objects.all()
     serializer_class = serializers.FacultySerializer
-    # permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated,)
 
     @action(methods=['get'], detail=False)
     def total(self, request, *args, **kwargs):
@@ -140,7 +191,6 @@ class FacultyView(mixins.ListModelMixin,
         totals = faculty.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
         return export_to_excel.export_data(faculty, totals, 'faculty')
 
-
     def destroy(self, request, *args, **kwargs):
         item_id = kwargs.get('pk')
         try:
@@ -148,7 +198,7 @@ class FacultyView(mixins.ListModelMixin,
             faculty.delete()
             return Response({'data': faculty.name}, status=status.HTTP_204_NO_CONTENT)
         except ProtectedError as e:
-            return Response({'data': 'error'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'data': f'Из этого факультета заселены студенты'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BuildingView(mixins.ListModelMixin,
@@ -175,7 +225,7 @@ class BuildingView(mixins.ListModelMixin,
             building.delete()
             return Response({'data': building.name, 'status': 'success'}, status=status.HTTP_200_OK)
         except ProtectedError as e:
-            return Response({'data': 'error'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'data': 'В этом здание есть комнаты'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class RoomTypeView(mixins.ListModelMixin,
@@ -185,6 +235,7 @@ class RoomTypeView(mixins.ListModelMixin,
                    viewsets.GenericViewSet):
     queryset = RoomType.objects.all()
     serializer_class = serializers.RoomTypeSerializer
+    # permission_classes = (IsAuthenticated,)
 
 
 class RoomView(mixins.ListModelMixin,
@@ -212,12 +263,12 @@ class RoomView(mixins.ListModelMixin,
 
     def destroy(self, request, *args, **kwargs):
         room_id = kwargs.get('pk')
+        room = get_object_or_404(Room, pk=room_id)
         try:
-            room = get_object_or_404(Room, pk=room_id)
             room.delete()
-            return Response({'message': 'deleted'})
-        except Exception as e:
-            return Response({'message': 'error'})
+            return Response({'data': room.number})
+        except ProtectedError as e:
+            return Response({'error': f'В {room.number} комнате заселены студенты'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class StudentView(mixins.ListModelMixin,
@@ -268,6 +319,7 @@ class BookView(mixins.ListModelMixin,
     filter_backends = (filters.DjangoFilterBackend,)
     pagination_class = CustomPagination
     filterset_class = BookFilter
+    permission_classes = (IsAuthenticated,)
 
     # parser_classes = (FormParser, MultiPartParser)
 
@@ -303,7 +355,6 @@ class BookView(mixins.ListModelMixin,
         sana2 = datetime.date.today()
 
         res = (sana.year - sana2.year) * 12 + (sana.month - sana2.month)
-        print(res)
         return Response('message')
 
 
@@ -314,9 +365,10 @@ class PrivilegeView(mixins.ListModelMixin,
                     viewsets.GenericViewSet):
     queryset = Privilege.objects.all()
     serializer_class = serializers.PrivilegeSerializer
+    permission_classes = (IsAuthenticated,)
 
     def create(self, request, *args, **kwargs):
-        privilege = serializers.PrivilegeSerializer(data=request.data)
+        privilege = self.get_serializer(data=request.data)
         privilege.is_valid(raise_exception=True)
         privilege.save()
         headers = self.get_success_headers(privilege.data)
@@ -324,10 +376,14 @@ class PrivilegeView(mixins.ListModelMixin,
         # print(headers.keys())
         return Response({'data': privilege.data, 'headers': headers})
 
-
-class TesView(viewsets.ModelViewSet):
-    queryset = Privilege.objects.all()
-    serializer_class = serializers.PrivilegeSerializer
+    def destroy(self, request, *args, **kwargs):
+        privilege_id = kwargs.get('pk')
+        privilege = get_object_or_404(Privilege, pk=privilege_id)
+        try:
+            privilege.delete()
+            return Response({'data': privilege.name})
+        except ProtectedError as e:
+            return Response({'error': f'Это привилегия уже используется'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FreePlaceApi(mixins.ListModelMixin,
@@ -335,6 +391,8 @@ class FreePlaceApi(mixins.ListModelMixin,
     queryset = Room.objects.all()
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = FreeRoomFilter
+    permission_classes = (IsAuthenticated,)
+    serializer_class = serializers.FreePlaceSerializer
     pagination_class = CustomPagination
 
     def list(self, request, *args, **kwargs):
@@ -351,9 +409,9 @@ class FreePlaceApi(mixins.ListModelMixin,
         else:
             serializer = self.get_serializer(query, many=True)
             data = serializer.data
-        build_serial = serializers.BuildingSimpleSerializer(Building.objects.all(), many=True)
+        # build_serial = serializers.BuildingSimpleSerializer(Building.objects.all(), many=True)
         # data['results'].append({'building': build_serial.data})
-        data['building'] = build_serial.data
+        # data['building'] = build_serial.data
         return Response(data)
 
     @action(methods=['get'], detail=False)
@@ -364,7 +422,7 @@ class FreePlaceApi(mixins.ListModelMixin,
             students = Student.objects.annotate(
                 has_booking=Exists(Booking.objects.filter(student_id=OuterRef('pk')))
             ).filter(has_booking=False).values('id', 'name', 'last_name')
-            student = students.filter(Q(name__startswith=query) | Q(last_name__startswith=query))[:4]
+            student = students.filter(Q(name__istartswith=query) | Q(last_name__istartswith=query))[:4]
             serial = serializers.FreeStudentSearch(student, many=True)
             return Response({'data': serial.data})
         else:
@@ -380,7 +438,9 @@ class FilterStudentApi(mixins.ListModelMixin,
         return Response({'message': 'Ok'})
 
 
-class MainDormitoryApi(mixins.ListModelMixin, generics.GenericAPIView):
+class MainDormitoryApi(mixins.ListModelMixin,
+                       generics.GenericAPIView):
+    permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
         query = Building.objects.annotate(
@@ -410,4 +470,3 @@ class CatApi(mixins.ListModelMixin, generics.GenericAPIView):
             'country': country.data,
             'student_type': student_type.data
         }})
-

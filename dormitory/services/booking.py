@@ -13,7 +13,7 @@ class BookingService:
         start_month = book['book_date']
         privilege = book['privilege']
         # end_month = book['book_end']
-        end_month_default = datetime.date(2024, 7, 30)
+        end_month_default = datetime.date(2024, 6, 30)
         if privilege is None:
             date = end_month_default - start_month  # days
             diff_month = date.days // 30  # month
@@ -21,7 +21,7 @@ class BookingService:
         else:
             total_price = 0
 
-        book_data = Booking(**book, total_price=total_price, user_id=user)
+        book_data = Booking(**book, book_end=end_month_default, total_price=total_price, user_id=user)
         room = Room.objects.get(pk=book['room'].id)
         if room.person_count != room.room_type.place:
             room.person_count += 1
@@ -31,11 +31,10 @@ class BookingService:
                 room.is_full = 1
                 room.save()
             if room.room_gender == '2':
-                print('choose gender')
                 room.room_gender = book_data.student.gender
                 room.save()
         else:
-            raise APIException({'room': 'this room is full'})
+            raise APIException({'room': 'В этой комнате уже нет мест'})
 
         return room
 

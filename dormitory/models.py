@@ -181,10 +181,10 @@ class Student(models.Model):
     address = models.CharField(max_length=100, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICE)
     photo = ProcessedImageField(upload_to=main_util.upload_photo, blank=True, null=True)
-    country = models.ForeignKey(Country, on_delete=models.CASCADE)
+    country = models.ForeignKey(Country, on_delete=models.PROTECT)
     nationality = models.CharField(max_length=20, blank=True)
-    student_type = models.ForeignKey(StudentType, on_delete=models.CASCADE)
-    faculty = models.ForeignKey(Faculty, on_delete=models.CASCADE)
+    student_type = models.ForeignKey(StudentType, on_delete=models.PROTECT)
+    faculty = models.ForeignKey(Faculty, on_delete=models.PROTECT)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -230,9 +230,9 @@ class Payment(models.Model):
     id = models.AutoField(primary_key=True)
     booking = models.ForeignKey(Booking, on_delete=models.PROTECT)
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    payment_info = models.CharField(max_length=50, blank=True)
+    bill = models.CharField(max_length=20, blank=True)
     comment = models.TextField(blank=True)
-    payment_date = models.DateField()
+    payed_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

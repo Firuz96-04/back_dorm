@@ -19,10 +19,14 @@ def export_data(request, totals, book_name):
 
     worksheet = workbook.active
     worksheet.title = book_name.title()
+    if book_name == 'faculty':
+        title = 'Факультет'
+    else:
+        title = 'Страна'
 
     columns = [
         ('#', 5),
-        ('Факультет', 20),
+        (title, 20),
         ('Кол. студентов', 15),
         ('Заселены', 15),
 

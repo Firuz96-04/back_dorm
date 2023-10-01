@@ -29,7 +29,6 @@ class UserSerializer(ModelSerializer):
         return data
 
     def create(self, validated_data):
-        print(validated_data)
         user = CustomUser.objects.create(
             first_name=validated_data['first_name'],
             last_name=validated_data['last_name'],
@@ -51,7 +50,7 @@ class CountrySerializer(ModelSerializer):
     def validate(self, data):
         errors = validate_city_country(data, Country)
         if errors:
-            raise ValidationError({'errors': errors})
+            raise APIException({'error': errors[0]})
         return data
 
 
@@ -82,7 +81,7 @@ class FacultySerializer(ModelSerializer):
     def validate(self, data):
         errors = validate_faculty(data)
         if errors:
-            raise ValidationError({'errors': errors})
+            raise APIException({'error': errors[0]})
         return data
 
 
@@ -101,7 +100,7 @@ class BuildingSerializer(ModelSerializer):
     def validate(self, data):
         errors = validate_building(data)
         if errors:
-            raise APIException({'errors': errors})
+            raise APIException({'error': errors[0]})
         return data
 
     def to_representation(self, instance):
@@ -119,11 +118,9 @@ class BuildingEditSerializer(ModelSerializer):
     def validate(self, data):
         name = data.get('name')
         if name is not None:
-            print('eee')
-            # building = Building.objects.filter(name__iexact=name)
-            # if building:
-            #     print('building')
-            raise APIException({'building': f'this {name} is exists'})
+            building = Building.objects.filter(name__icontains=name)
+            if building:
+                raise APIException({'building': f'{name} уже добавлено'})
         return data
 
     def to_representation(self, instance):
@@ -184,7 +181,7 @@ class RoomSerializer(ModelSerializer):
     def validate(self, data):
         room = Room.objects.filter(number=data['number'], building_id=data['building'])
         if room:
-            raise APIException({'room': 'this room is exists'})
+            raise APIException({'error': f"{data['number']} комната уже добавлено"})
         return data
 
     def to_representation(self, instance):
@@ -260,7 +257,7 @@ class BookSerializer(ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = ('student', 'room', 'privilege', 'user', 'total_price',
+        fields = ('id', 'student', 'room', 'privilege', 'user', 'total_price',
                   'payed', 'debt', 'book_date', 'book_end', 'created_at')
 
     def get_debt(self, obj):
@@ -270,20 +267,18 @@ class BookSerializer(ModelSerializer):
     def validate(self, data):
         errors = []
         book = Booking.objects.filter(student=data['student'])
-        print(data['student'].gender)
-        print(data['room'].room_gender, 'room')
 
         if book:
-            errors.append({'student': 'student exists'})
+            errors.append({'student': 'Этот студент уже заселен'})
 
         if data['room'].room_gender == '2':
             pass
         else:
             if data['room'].room_gender != data['student'].gender:
                 if data['room'].room_gender == '0':
-                    raise APIException({'gender': 'only woman'})
+                    raise APIException({'gender': 'Вы можете заселить только женщин'})
                 else:
-                    raise APIException({'gender': 'only man'})
+                    raise APIException({'gender': 'Вы можете заселить только мужчин'})
             else:
                 pass
 
@@ -332,10 +327,10 @@ class PrivilegeSerializer(ModelSerializer):
         errors = []
         privilege = Privilege.objects.filter(name__iexact=data['name'])
         if privilege:
-            errors.append({'privilege': 'this privilege exists'})
+            errors.append('Это привилегия уже добавлено')
 
         if errors:
-            raise APIException({'error': errors})
+            raise APIException({'error': errors[0]})
         return data
 
 

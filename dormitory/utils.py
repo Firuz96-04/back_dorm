@@ -26,7 +26,7 @@ def upload_photo(instance, filename):
 
 
 class CustomPagination(PageNumberPagination, ABC):
-    page_size = 25
+    page_size = 15
     max_page_size = 100
     page_size_query_param = 'page_size'
 
