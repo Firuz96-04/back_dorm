@@ -1,7 +1,8 @@
 from django.urls import path
 from .views import (CountryView, PrincipalView,
                     FacultyView, BuildingView, RoomTypeView, StudentView, RoomView,
-                    PrivilegeView, BookView, FreePlaceApi, ManagerRegisterApi, StudentTypeApi, CatApi, MainDormitoryApi)
+                    PrivilegeView, BookView, FreePlaceApi, ManagerRegisterApi, StudentTypeApi, CompanyApi, GroupApi,
+                    CatApi, MainDormitoryApi)
 from rest_framework.routers import DefaultRouter
 from accounts.views import PaymentApi
 
@@ -18,6 +19,8 @@ router.register(r'free-place', FreePlaceApi, basename='free-place')
 router.register(r'student-type', StudentTypeApi, basename='student-type')
 router.register(r'privilege', PrivilegeView, basename='privilege')
 
+router.register(r'company', CompanyApi, basename='company')
+router.register(r'group', GroupApi, basename='group')
 # account
 
 router.register(r'payment', PaymentApi, basename='payment')

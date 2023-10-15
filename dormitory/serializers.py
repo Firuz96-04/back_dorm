@@ -1,14 +1,42 @@
-from abc import ABC
-
 from django.contrib.auth.password_validation import validate_password
-from rest_framework import serializers
+from rest_framework import serializers, status
 from rest_framework.serializers import ModelSerializer, Serializer
 from rest_framework.exceptions import APIException, ValidationError
 from .models import (Country, Principal, Faculty, Building,
-                     RoomType, Student, Room, Privilege, Booking, CustomUser, StudentType)
+                     RoomType, Student, Room, Privilege, Booking, CustomUser, Company, Group, StudentType)
 
-from .validators import (validate_building, validate_room, validate_faculty, validate_principal, validate_city_country,
+from .validators import (validate_building, validate_room, validate_faculty, common_validate,
+                         validate_principal, validate_city_country,
                          validate_register)
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework.exceptions import AuthenticationFailed
+from datetime import date
+
+
+class CustomTokenRefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        # validated_data = super().validate(attrs)
+        try:
+            validated_data = super().validate(attrs)
+        except Exception as e:
+            raise AuthenticationFailed({'error': 'refresh_expired', 'status': '401'})
+        # except TokenError as e:
+        #     raise AuthenticationFailed({'error': 'refresh_expired', 'status': '401'})
+
+        # Add custom logic here if needed
+        user = self.context['request'].user  # Get the current user from the request
+
+        # For example, you can check if the user is active
+        # if not user.is_active:
+        #     raise serializers.ValidationError("User is not active.")
+
+        # You can also check for other conditions, such as user roles or permissions
+        # if not user.has_permission('some_permission'):
+        #     raise serializers.ValidationError("User does not have the required permission.")
+
+        # If all custom checks pass, return the validated data
+        return validated_data
 
 
 class UserSerializer(ModelSerializer):
@@ -54,6 +82,46 @@ class CountrySerializer(ModelSerializer):
         return data
 
 
+class FacultySerializer(ModelSerializer):
+    class Meta:
+        model = Faculty
+        fields = ('id', 'name')
+
+    def validate(self, data):
+        errors = validate_faculty(data)
+        if errors:
+            raise APIException({'error': errors[0]})
+        return data
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = '__all__'
+
+    def validate(self, data):
+        return common_validate(Group, data, 'group')
+
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+        response['faculty'] = FacultySerializer(instance.faculty).data
+
+        return response
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = '__all__'
+
+    def validate(self, data):
+        return common_validate(Company, data, 'company')
+        # company = Company.objects.filter(name__iexact=data['name'])
+        # if company:
+        #     raise APIException({'company': f'{data["name"]} уже добавлено'})
+        # return data
+
+
 class CountryCounterSerializer(Serializer):
     student_count = serializers.IntegerField()
     booking_count = serializers.IntegerField()
@@ -73,23 +141,41 @@ class PrincipalSerializer(ModelSerializer):
         return data
 
 
-class FacultySerializer(ModelSerializer):
-    class Meta:
-        model = Faculty
-        fields = ('id', 'name')
-
-    def validate(self, data):
-        errors = validate_faculty(data)
-        if errors:
-            raise APIException({'error': errors[0]})
-        return data
-
-
 class FacultyCounterSerializer(Serializer):
     student_count = serializers.IntegerField()
     booking_count = serializers.IntegerField()
     name = serializers.CharField()
     id = serializers.IntegerField()
+
+
+class CompanyCounterSerializer(Serializer):
+    student_count = serializers.IntegerField()
+    booking_count = serializers.IntegerField()
+    name = serializers.CharField()
+    phone = serializers.CharField()
+    director = serializers.CharField()
+    description = serializers.CharField()
+    id = serializers.IntegerField()
+
+
+class GroupCounterSerializer(Serializer):
+    student_count = serializers.IntegerField()
+    booking_count = serializers.IntegerField()
+    name = serializers.CharField()
+    faculty = serializers.CharField(source='faculty.name')
+    id = serializers.IntegerField()
+
+
+class OnlyGroupSerializer(ModelSerializer):
+
+    class Meta:
+        model = Group
+        fields = ('id', 'name')
+
+
+class OnlyCompanySerializer(Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
 
 
 class BuildingSerializer(ModelSerializer):
@@ -150,7 +236,7 @@ class BookStudentSerializer(Serializer):
     full_name = serializers.SerializerMethodField(method_name='get_full_name')
     course = serializers.CharField(max_length=1)
     student_type = serializers.CharField(source='student_type.type')
-    faculty = FacultySerializer()
+    group = OnlyGroupSerializer()
     country = CountrySerializer()
     gender = serializers.CharField(max_length=1)
 
@@ -229,7 +315,7 @@ class StudentSerializer(ModelSerializer):
     class Meta:
         model = Student
         fields = ('id', 'name', 'last_name', 'country', 'phone', 'born', 'address',
-                  'gender', 'student_type', 'faculty', 'course', 'user', 'created_at')
+                  'gender', 'company', 'student_type', 'group', 'course', 'user', 'created_at')
 
     def validate(self, data):
         errors = []
@@ -242,27 +328,70 @@ class StudentSerializer(ModelSerializer):
         return data
 
     def to_representation(self, instance):
-        resonse = super(StudentSerializer, self).to_representation(instance)
-        resonse['country'] = CountrySerializer(instance.country).data
-        resonse['faculty'] = FacultySerializer(instance.faculty).data
-        resonse['student_type'] = StudentTypeSerializer(instance.student_type).data
+        response = super().to_representation(instance)
+        response['country'] = CountrySerializer(instance.country).data
+        response['group'] = OnlyGroupSerializer(instance.group).data
+        if response['company'] is not None:
+            response['company'] = OnlyCompanySerializer(instance.company).data
+        else:
+            response['company'] = None
+        response['student_type'] = StudentTypeSerializer(instance.student_type).data
 
-        return resonse
+        return response
+
+
+class StudentEditSerializer(ModelSerializer):
+    user = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(format='%Y-%m-%d %H:%M', read_only=True)
+
+    class Meta:
+        model = Student
+        fields = ('id', 'name', 'last_name', 'country', 'phone', 'born', 'address',
+                  'gender', 'company', 'student_type', 'group', 'course', 'user', 'created_at')
+
+    def validate(self, data):
+        errors = []
+        student = Student.objects.filter(name__iexact=data.get('name'), last_name__iexact=data.get('last_name'))
+        if student:
+            errors.append({'student': 'this student uje v baze'})
+
+        if errors:
+            raise APIException({'student': errors})
+        return data
+
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+        response['country'] = CountrySerializer(instance.country).data
+        response['group'] = OnlyGroupSerializer(instance.group).data
+        response['student_type'] = StudentTypeSerializer(instance.student_type).data
+        if response['company'] is not None:
+            response['company'] = OnlyCompanySerializer(instance.company).data
+        else:
+            response['company'] = None
+        # response['company'] = OnlyCompanySerializer(instance.company).data
+
+        return response
 
 
 class BookSerializer(ModelSerializer):
     created_at = serializers.DateTimeField(format="%d.%m.%Y %H:%M", required=False)
     user = serializers.CharField(read_only=True, required=False)
     debt = serializers.SerializerMethodField(method_name='get_debt')
+    day_lives = serializers.SerializerMethodField(method_name='get_day_lives')
 
     class Meta:
         model = Booking
         fields = ('id', 'student', 'room', 'privilege', 'user', 'total_price',
-                  'payed', 'debt', 'book_date', 'book_end', 'created_at')
+                  'payed', 'debt', 'book_date', 'book_end', 'status', 'day_lives', 'created_at')
 
     def get_debt(self, obj):
         total_debt = obj.total_price - obj.payed
         return str(total_debt)
+
+    def get_day_lives(self, obj):
+        today = date.today()
+        total = today - obj.book_date
+        return total.days
 
     def validate(self, data):
         errors = []

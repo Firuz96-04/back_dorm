@@ -10,7 +10,7 @@ from rest_framework import mixins, viewsets, generics
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import (Country, Principal, Faculty, Building, RoomType, Room, Student,
-                     Booking, Privilege, CustomUser, StudentType)
+                     Booking, Privilege, CustomUser, Company, Group, StudentType)
 from . import serializers
 from rest_framework.decorators import action
 from .utils import CustomPagination
@@ -19,10 +19,45 @@ from .services.booking import BookingService
 from django_filters import rest_framework as filters
 from .filters import StudentFilter, FreeRoomFilter, BookFilter, RoomFilter
 from .utils import export_to_excel
+from rest_framework_simplejwt.views import TokenRefreshView
 import time
+from datetime import datetime, timedelta
+import calendar
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    serializer_class = serializers.CustomTokenRefreshSerializer
 
 
 # from datetime import datetime
+# class CustomTokenRefreshSerializer(TokenRefreshSerializer):
+#     def validate(self, attrs):
+#         # Add custom logic here if needed
+#         # For example, you can check for certain conditions or permissions
+#         return super().validate(attrs)
+#
+#
+# class CustomTokenRefreshView(TokenRefreshView):
+#
+#     def post(self, request, *args, **kwargs):
+#         # Call the parent class's post method to refresh the token
+#         print('sss', 'errer')
+#         response = super().post(request, *args, **kwargs)
+#         print(response, 'response')
+#         # Check if the token refresh was successful
+#         if response.status_code == status.HTTP_200_OK:
+#             # You can add custom logic here if needed
+#             print(response, 'response')
+#             # For example, you can log the token refresh
+#             pass
+#         else:
+#             # Handle the case where the refresh token is expired or invalid
+#             # You can customize the error response here
+#             response.data = {
+#                 "error": "Refresh token has expired or is invalid."
+#             }
+#
+#         return response
 
 
 class ManagerRegisterApi(mixins.CreateModelMixin,
@@ -57,15 +92,13 @@ class LoginApi(mixins.CreateModelMixin,
                 #     user_data = serializers.UserSerializer(user, many=False)
 
                 refresh = RefreshToken.for_user(user)
-                print(user, 'user')
-                # refresh['user_name'] = user.name
-
                 data = {
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
                     # 'user': user_data.data
                 }
                 # return Response({'data': data})
+                print('got error')
                 return Response(data)
             return Response({'user': 'user not active'}, status=status.HTTP_400_BAD_REQUEST)
             # {
@@ -102,6 +135,46 @@ class LoginApi(mixins.CreateModelMixin,
 #             }
 #             return Response({'data': data})
 #         return Response({'message': 'user not found'})
+
+
+class GroupApi(mixins.ListModelMixin,
+               mixins.CreateModelMixin,
+               mixins.UpdateModelMixin,
+               mixins.DestroyModelMixin,
+               viewsets.GenericViewSet):
+    queryset = Group.objects.select_related('faculty')
+    serializer_class = serializers.GroupSerializer
+
+    @action(methods=['get'], detail=False)
+    def total(self, request, *args, **kwargs):
+        group = Group.objects.annotate(
+            booking_count=Count('student__booking'),
+            student_count=Count('student'),
+        )
+        totals = group.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
+        serial = serializers.GroupCounterSerializer(group, many=True)
+        return Response({'data': serial.data, 'totals': {'book_total': totals['book_total'],
+                                                         'student_total': totals['student_total']}})
+
+
+class CompanyApi(mixins.ListModelMixin,
+                 mixins.CreateModelMixin,
+                 mixins.UpdateModelMixin,
+                 mixins.DestroyModelMixin,
+                 viewsets.GenericViewSet):
+    queryset = Company.objects.all()
+    serializer_class = serializers.CompanySerializer
+
+    @action(methods=['get'], detail=False)
+    def total(self, request, *args, **kwargs):
+        company = Company.objects.annotate(
+            booking_count=Count('student__booking'),
+            student_count=Count('student'),
+        )
+        totals = company.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
+        serial = serializers.CompanyCounterSerializer(company, many=True)
+        return Response({'data': serial.data, 'totals': {'book_total': totals['book_total'],
+                                                         'student_total': totals['student_total']}})
 
 
 class CountryView(mixins.ListModelMixin,
@@ -174,8 +247,8 @@ class FacultyView(mixins.ListModelMixin,
     @action(methods=['get'], detail=False)
     def total(self, request, *args, **kwargs):
         faculty = Faculty.objects.annotate(
-            booking_count=Count('student__booking'),
-            student_count=Count('student__id'),
+            booking_count=Count('group__student__booking'),
+            student_count=Count('group__student'),
         )
         totals = faculty.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
         serial = serializers.FacultyCounterSerializer(faculty, many=True)
@@ -277,11 +350,19 @@ class StudentView(mixins.ListModelMixin,
                   mixins.DestroyModelMixin,
                   viewsets.GenericViewSet):
     queryset = Student.objects.order_by('-id')
-    serializer_class = serializers.StudentSerializer
+    # serializer_class = serializers.StudentSerializer
     pagination_class = CustomPagination
     permission_classes = (IsAuthenticated,)
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = StudentFilter
+
+    def get_serializer_class(self):
+        if self.action in ['list', 'create']:
+            return serializers.StudentSerializer
+        elif self.action in ['update', 'partial_update']:
+            return serializers.StudentEditSerializer
+        else:
+            return super().get_serializer_class()
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -297,6 +378,10 @@ class StudentView(mixins.ListModelMixin,
             serializer = self.get_serializer(student, many=True)
             data = serializer.data
         return Response(data)
+
+    # def update(self, request, *args, **kwargs):
+    #
+    #     return Response({'message': 'Ok'})
 
     @action(methods=['get'], detail=False)
     def categories(self, request):
@@ -327,7 +412,7 @@ class BookView(mixins.ListModelMixin,
         serializer.save()
 
     def get_queryset(self):
-        return Booking.objects.select_related('room__building', 'student__country', 'student__faculty',
+        return Booking.objects.select_related('room__building', 'student__country', 'student__group',
                                               'user').order_by('created_at')
 
     def list(self, request, *args, **kwargs):
@@ -350,12 +435,60 @@ class BookView(mixins.ListModelMixin,
         serial = serializers.FreeAddPlaceSerializer(book_data)
         return Response({'data': serial.data})
 
-    def update(self, request, *args, **kwargs):
-        sana = datetime.date(2024, 6, 13)
-        sana2 = datetime.date.today()
+    @action(methods=['get'], detail=False)
+    def room_place(self, request, *args, **kwargs):
+        room_id = request.query_params.get('id')
+        book = Booking.objects.filter(room_id=room_id, status=1)
+        serial = serializers.BookSerializer(book, many=True)
+        return Response({'data': serial.data})
 
-        res = (sana.year - sana2.year) * 12 + (sana.month - sana2.month)
-        return Response('message')
+    def update(self, request, *args, **kwargs):
+        start_date = datetime(2023, 10, 1).date()
+        # end_date = datetime(2024, 6, 30)
+        book_id = kwargs.get('pk')
+        book = get_object_or_404(Booking, pk=book_id)
+        book_end = datetime.strptime(request.data.get('book_end'), "%Y-%m-%d").date()
+
+        current_date = start_date
+        total_31 = 0
+        feb_add_day = 0
+        feb_last_day = 0
+        finish_end = None
+        if book_end.day == 31:
+            finish_end = book_end - timedelta(1)
+        else:
+            finish_end = book_end
+
+        print(finish_end, 'finish')
+        while current_date <= finish_end:
+            if current_date.day == 31:
+                total_31 += 1
+            current_date += timedelta(days=1)
+            if current_date.month == 2:
+
+                next_month = (current_date.month % 12) + 1
+                feb_last_day = (datetime(current_date.year, next_month, 1) - timedelta(days=1)).day
+                # feb_add_day = 30 - feb_last_day
+
+        # print(feb_last_day in [28, 29])
+        # print(end_date, 'end date')
+        if feb_last_day in [28, 29]:
+            feb_add_day = 30 - feb_last_day
+
+        # book_end = request.data.get('book_end')
+        # book_start = datetime.strptime(book_end, "%Y-%m-%d").date()
+        # total_days = (book_start - book.book_date).days
+        total_days = (finish_end - start_date).days
+        print(total_days, 'days')
+        if book.student.student_type_id == 1:
+            # day_price = (total_days + 1 + feb_add_day) * book.student.student_type.day - total_31 * book.student.student_type.day
+            day_price = (total_days + 1 + feb_add_day) * book.student.student_type.day - total_31 * book.student.student_type.day
+        else:
+            day_price = total_days * book.student.student_type.day
+
+        print(day_price)
+
+        return Response({'message': 'OK'})
 
 
 class PrivilegeView(mixins.ListModelMixin,

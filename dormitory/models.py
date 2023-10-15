@@ -32,6 +32,17 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
+class Role(models.Model):
+    id = models.SmallAutoField(primary_key=True)
+    name = models.CharField(max_length=40)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'role'
+
+
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     ROLES = [
         ('1', 'admin'),
@@ -64,6 +75,17 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
+
+
+class Company(models.Model):
+    id = models.SmallAutoField(primary_key=True)
+    name = models.CharField(max_length=40)
+    phone = models.CharField(max_length=15, blank=True)
+    director = models.CharField(max_length=40, blank=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'company'
 
 
 class Country(models.Model):
@@ -102,6 +124,18 @@ class Faculty(models.Model):
         db_table = 'faculty'
 
 
+class Group(models.Model):
+    id = models.SmallAutoField(primary_key=True)
+    name = models.CharField(max_length=40)
+    faculty = models.ForeignKey(Faculty, on_delete=models.PROTECT)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'group'
+
+
 class Building(models.Model):
     id = models.SmallAutoField(primary_key=True)
     name = models.CharField(max_length=25, blank=True)
@@ -125,9 +159,27 @@ class StudentType(models.Model):
     id = models.SmallAutoField(primary_key=True)
     type = models.CharField(max_length=15, choices=TYPE)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    day = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     class Meta:
         db_table = 'student_type'
+
+
+class BookingStatus(models.Model):
+    CHOICES = (
+        (1, 'booking'),
+        (2, 'process'),
+        (3, 'canceling'),
+    )
+
+    id = models.SmallAutoField(primary_key=True)
+    name = models.CharField(max_length=20, choices=CHOICES)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = 'booking_status'
 
 
 class RoomType(models.Model):
@@ -184,7 +236,8 @@ class Student(models.Model):
     country = models.ForeignKey(Country, on_delete=models.PROTECT)
     nationality = models.CharField(max_length=20, blank=True)
     student_type = models.ForeignKey(StudentType, on_delete=models.PROTECT)
-    faculty = models.ForeignKey(Faculty, on_delete=models.PROTECT)
+    group = models.ForeignKey(Group, on_delete=models.PROTECT)
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, blank=True, null=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -219,7 +272,8 @@ class Booking(models.Model):
     privilege = models.ForeignKey(Privilege, on_delete=models.PROTECT, blank=True, null=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payed = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    status = models.ForeignKey(BookingStatus, on_delete=models.PROTECT, default=1)
     created_at = models.DateTimeField(auto_now_add=True, blank=True)
 
     class Meta:
@@ -252,3 +306,5 @@ class TestBooking(models.Model):
 
     class Meta:
         db_table = 'test_book'
+
+

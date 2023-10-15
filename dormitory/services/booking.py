@@ -39,19 +39,7 @@ class BookingService:
 
         return room
 
-        # if room.room_gender == '0':
-        #     room.room_gender =
+    @staticmethod
+    def un_booking(book):
 
-        # book_data.save()  # works with signals
-        #
-        # try:
-        #     book_data.save()
-        #     if book_data.id is not None:
-        #         room = Room.objects.get(pk=book_data.room.id)
-        #         if room.person_count != room.room_type.place:
-        #             room.person_count += 1
-        #             room.save()
-        #         else:
-        #             raise ValidationError({'room': 'this room is full'})
-        # except Exception as e:
-        #     print('not savee')
+        pass

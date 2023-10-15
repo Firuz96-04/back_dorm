@@ -2,6 +2,13 @@ from rest_framework.exceptions import APIException
 from .models import (Building, RoomType, Faculty, Principal, CustomUser)
 
 
+def common_validate(object, data, title):
+    main = object.objects.filter(name__iexact=data['name'])
+    if main:
+        raise APIException({title: f'{data["name"]} уже добавлено'})
+    return data
+
+
 def validate_building(data):
     errors = []
     building = Building.objects.filter(name__iexact=data['name'])
