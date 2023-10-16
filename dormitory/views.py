@@ -443,52 +443,57 @@ class BookView(mixins.ListModelMixin,
         return Response({'data': serial.data})
 
     def update(self, request, *args, **kwargs):
-        start_date = datetime(2023, 10, 1).date()
-        # end_date = datetime(2024, 6, 30)
         book_id = kwargs.get('pk')
         book = get_object_or_404(Booking, pk=book_id)
-        book_end = datetime.strptime(request.data.get('book_end'), "%Y-%m-%d").date()
+        if book.status_id == 1:
+            book_end = datetime.strptime(request.data.get('book_end'), "%Y-%m-%d").date()
+            book_start = book.book_date
 
-        current_date = start_date
-        total_31 = 0
-        feb_add_day = 0
-        feb_last_day = 0
-        finish_end = None
-        if book_end.day == 31:
-            finish_end = book_end - timedelta(1)
-        else:
-            finish_end = book_end
+            current_date = book_start
+            total_31 = 0
+            feb_add_day = 0
+            feb_last_day = 0
 
-        print(finish_end, 'finish')
-        while current_date <= finish_end:
-            if current_date.day == 31:
-                total_31 += 1
-            current_date += timedelta(days=1)
-            if current_date.month == 2:
+            if book_end.day == 31:
+                finish_end = book_end - timedelta(1)
+            else:
+                finish_end = book_end
 
-                next_month = (current_date.month % 12) + 1
-                feb_last_day = (datetime(current_date.year, next_month, 1) - timedelta(days=1)).day
-                # feb_add_day = 30 - feb_last_day
+            while current_date <= finish_end:
+                if current_date.day == 31:
+                    total_31 += 1
+                current_date += timedelta(days=1)
+                if current_date.month == 2:
 
-        # print(feb_last_day in [28, 29])
-        # print(end_date, 'end date')
-        if feb_last_day in [28, 29]:
-            feb_add_day = 30 - feb_last_day
+                    next_month = (current_date.month % 12) + 1
+                    feb_last_day = (datetime(current_date.year, next_month, 1) - timedelta(days=1)).day
+            if feb_last_day in [28, 29]:
+                feb_add_day = 30 - feb_last_day
 
-        # book_end = request.data.get('book_end')
-        # book_start = datetime.strptime(book_end, "%Y-%m-%d").date()
-        # total_days = (book_start - book.book_date).days
-        total_days = (finish_end - start_date).days
-        print(total_days, 'days')
-        if book.student.student_type_id == 1:
+            print(total_31, 'total_31')
+            total_days = (finish_end - book_start).days
             # day_price = (total_days + 1 + feb_add_day) * book.student.student_type.day - total_31 * book.student.student_type.day
-            day_price = (total_days + 1 + feb_add_day) * book.student.student_type.day - total_31 * book.student.student_type.day
-        else:
-            day_price = total_days * book.student.student_type.day
 
-        print(day_price)
+            day_price = (total_days + feb_add_day) * book.student.student_type.day - total_31 * book.student.student_type.day
+            print(day_price, 'day price')
+            print(total_days, 'total days')
+            book.book_end = book_end
+            book.total_price = day_price
+            book.status_id = 2
+            book.save()
 
-        return Response({'message': 'OK'})
+            room = Room.objects.get(pk=book.room_id)
+            room.person_count -= 1
+            room.save()
+            if room.person_count == 0:
+                room.is_full = 0
+                room.room_gender = 2
+                room.save()
+            return Response({'data': {
+                'person_count': room.person_count,
+                'room_gender': room.room_gender
+            }})
+        return Response({'student': 'студент уже не жывет в обшежитие'})
 
 
 class PrivilegeView(mixins.ListModelMixin,

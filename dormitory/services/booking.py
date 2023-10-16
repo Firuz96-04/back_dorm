@@ -13,11 +13,16 @@ class BookingService:
         start_month = book['book_date']
         privilege = book['privilege']
         # end_month = book['book_end']
-        end_month_default = datetime.date(2024, 6, 30)
+        # end_month_default = datetime.date(2024, 6, 30)
+        end_month_default = "2024-6-30"
+
+        date1 = datetime.datetime.strptime(end_month_default, "%Y-%m-%d")
+        date2 = datetime.datetime.strptime(str(start_month), "%Y-%m-%d")
 
         if privilege is None:
-            date = end_month_default - start_month  # days
-            diff_month = date.days // 30  # month
+            # date = end_month_default - start_month  # days
+            # diff_month = date.days // 30  # month
+            diff_month = (date1.year - date2.year) * 12 + date1.month - date2.month
             total_price = book['student'].student_type.price * (diff_month + 1)
         else:
             total_price = 0
