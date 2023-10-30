@@ -2,6 +2,7 @@ import datetime
 
 from django.contrib.auth import authenticate
 from django.db.models import Count, Sum, F, Exists, OuterRef, Q, ProtectedError
+from rest_framework.exceptions import APIException
 from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -9,7 +10,7 @@ from rest_framework import status
 from rest_framework import mixins, viewsets, generics
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import (Country, Principal, Faculty, Building, RoomType, Room, Student,
+from .models import (Country, Faculty, Building, RoomType, Room, Student,
                      Booking, Privilege, CustomUser, Company, Group, StudentType)
 from . import serializers
 from rest_framework.decorators import action
@@ -17,11 +18,12 @@ from .utils import CustomPagination
 from rest_framework.permissions import IsAuthenticated
 from .services.booking import BookingService
 from django_filters import rest_framework as filters
-from .filters import StudentFilter, FreeRoomFilter, BookFilter, RoomFilter
+from .filters import StudentFilter, FreeRoomFilter, BookFilter, RoomFilter, GroupFilter
 from .utils import export_to_excel
 from rest_framework_simplejwt.views import TokenRefreshView
 import time
-from datetime import datetime, timedelta
+from dormitory.permissions import CommandantPermission
+# from datetime import datetime, timedelta
 import calendar
 
 
@@ -66,11 +68,17 @@ class ManagerRegisterApi(mixins.CreateModelMixin,
     serializer_class = serializers.UserSerializer
 
     def post(self, request, *args, **kwargs):
-        user = serializers.UserSerializer(data=request.data)
+        user = serializers.UserSerializer(data=request.data, context={'request': request})
         user.is_valid(raise_exception=True)
-        user.save(role='2')
+        user.save()
+        return Response(user.data)
 
-        return Response({'data': user.data})
+    # def post(self, request, *args, **kwargs):
+    #     user = serializers.UserSerializer(data=request.data)
+    #     user.is_valid(raise_exception=True)
+    #     user.save(role='2')
+    #
+    #     return Response({'data': user.data})
 
 
 class LoginApi(mixins.CreateModelMixin,
@@ -85,20 +93,17 @@ class LoginApi(mixins.CreateModelMixin,
         user = authenticate(email=email, password=password)
         if user is not None:
             if user.is_active:
-                # if user.role.id == 3:
-                #     user_data = serializers.StudentLoginSerializer(user.student, many=False,
-                #                                                    context={'request': request})
-                # else:
-                #     user_data = serializers.UserSerializer(user, many=False)
+                if user.role in ['1', '2']:
+                    user_data = serializers.CustomUserSerializer(user, many=False)
+                else:
+                    user_data = serializers.CommandantUserSerializer(user, many=False)
 
                 refresh = RefreshToken.for_user(user)
                 data = {
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
-                    # 'user': user_data.data
+                    'user': user_data.data
                 }
-                # return Response({'data': data})
-                print('got error')
                 return Response(data)
             return Response({'user': 'user not active'}, status=status.HTTP_400_BAD_REQUEST)
             # {
@@ -119,10 +124,10 @@ class LoginApi(mixins.CreateModelMixin,
 #         if not email or not password:
 #             return Response({'please add email or password'})
 #         user = authenticate(email=email, password=password)
-#         if user.role.id == 3:
-#             user_data = StudentLoginSerializer(user.student, many=False)
-#         else:
-#             user_data = UserSerializer(user, many=False)
+#         # if user.role.id == 3:
+#         #     user_data = StudentLoginSerializer(user.student, many=False)
+#         # else:
+#         user_data = serializers.UserSerializer(user, many=False)
 #         print(user, 'user')
 #         if user is not None:
 #             refresh = RefreshToken.for_user(user)
@@ -131,7 +136,7 @@ class LoginApi(mixins.CreateModelMixin,
 #             data = {
 #                 'refresh': str(refresh),
 #                 'access': str(refresh.access_token),
-#                 'user': 'user_data.data'
+#                 'user': user_data.data
 #             }
 #             return Response({'data': data})
 #         return Response({'message': 'user not found'})
@@ -144,6 +149,9 @@ class GroupApi(mixins.ListModelMixin,
                viewsets.GenericViewSet):
     queryset = Group.objects.select_related('faculty')
     serializer_class = serializers.GroupSerializer
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = GroupFilter
 
     @action(methods=['get'], detail=False)
     def total(self, request, *args, **kwargs):
@@ -151,10 +159,20 @@ class GroupApi(mixins.ListModelMixin,
             booking_count=Count('student__booking'),
             student_count=Count('student'),
         )
-        totals = group.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
-        serial = serializers.GroupCounterSerializer(group, many=True)
+        query = self.filter_queryset(group)
+        totals = query.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
+        serial = serializers.GroupCounterSerializer(query, many=True)
         return Response({'data': serial.data, 'totals': {'book_total': totals['book_total'],
                                                          'student_total': totals['student_total']}})
+
+    @action(methods=['get'], detail=False)
+    def export(self, request, *args, **kwargs):
+        group = Group.objects.annotate(
+            booking_count=Count('student__booking'),
+            student_count=Count('student'),
+        )
+        totals = group.aggregate(book_total=Sum('booking_count'), student_total=Sum('student_count'))
+        return export_to_excel.export_group(group, totals, 'group')
 
 
 class CompanyApi(mixins.ListModelMixin,
@@ -225,24 +243,22 @@ class StudentTypeApi(mixins.ListModelMixin,
     serializer_class = serializers.StudentTypeSerializer
 
 
-class PrincipalView(mixins.ListModelMixin,
-                    mixins.CreateModelMixin,
-                    mixins.UpdateModelMixin,
-                    mixins.DestroyModelMixin,
-                    viewsets.GenericViewSet):
-    queryset = Principal.objects.all()
-    serializer_class = serializers.PrincipalSerializer
-    permission_classes = (IsAuthenticated,)
-
-
 class FacultyView(mixins.ListModelMixin,
                   mixins.CreateModelMixin,
                   mixins.UpdateModelMixin,
                   mixins.DestroyModelMixin,
                   viewsets.GenericViewSet):
     queryset = Faculty.objects.all()
-    serializer_class = serializers.FacultySerializer
+    # serializer_class = serializers.FacultySerializer
     permission_classes = (IsAuthenticated,)
+
+    def get_serializer_class(self):
+        if self.action in ['list', 'create']:
+            return serializers.FacultySerializer
+        elif self.action in ['update', 'partial_update']:
+            return serializers.FacultyEditSerializer
+        else:
+            return super().get_serializer_class()
 
     @action(methods=['get'], detail=False)
     def total(self, request, *args, **kwargs):
@@ -279,7 +295,7 @@ class BuildingView(mixins.ListModelMixin,
                    mixins.UpdateModelMixin,
                    mixins.DestroyModelMixin,
                    viewsets.GenericViewSet):
-    queryset = Building.objects.select_related('principal')
+    queryset = Building.objects.all()
     serializer_class = serializers.BuildingSerializer
     permission_classes = (IsAuthenticated,)
 
@@ -316,12 +332,21 @@ class RoomView(mixins.ListModelMixin,
                mixins.UpdateModelMixin,
                mixins.DestroyModelMixin,
                viewsets.GenericViewSet):
-    queryset = Room.objects.select_related('room_type', 'user', 'building').order_by('-id')
     serializer_class = serializers.RoomSerializer
     pagination_class = CustomPagination
-    permission_classes = (IsAuthenticated,)
+    # permission_classes = (IsAuthenticated,)
+    permission_classes = (CommandantPermission,)
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = RoomFilter
+
+    def get_queryset(self):
+        if self.request.user.role == '1':
+            return Room.objects.select_related('room_type', 'user', 'building').order_by('-id')
+        elif self.request.user.role == '3':
+            return Room.objects.filter(user=self.request.user).select_related('room_type', 'user', 'building').order_by(
+                '-id')
+        else:
+            raise APIException({'error': 'you have no permission'})
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -446,54 +471,12 @@ class BookView(mixins.ListModelMixin,
         book_id = kwargs.get('pk')
         book = get_object_or_404(Booking, pk=book_id)
         if book.status_id == 1:
-            book_end = datetime.strptime(request.data.get('book_end'), "%Y-%m-%d").date()
-            book_start = book.book_date
-
-            current_date = book_start
-            total_31 = 0
-            feb_add_day = 0
-            feb_last_day = 0
-
-            if book_end.day == 31:
-                finish_end = book_end - timedelta(1)
-            else:
-                finish_end = book_end
-
-            while current_date <= finish_end:
-                if current_date.day == 31:
-                    total_31 += 1
-                current_date += timedelta(days=1)
-                if current_date.month == 2:
-
-                    next_month = (current_date.month % 12) + 1
-                    feb_last_day = (datetime(current_date.year, next_month, 1) - timedelta(days=1)).day
-            if feb_last_day in [28, 29]:
-                feb_add_day = 30 - feb_last_day
-
-            print(total_31, 'total_31')
-            total_days = (finish_end - book_start).days
-            # day_price = (total_days + 1 + feb_add_day) * book.student.student_type.day - total_31 * book.student.student_type.day
-
-            day_price = (total_days + feb_add_day) * book.student.student_type.day - total_31 * book.student.student_type.day
-            print(day_price, 'day price')
-            print(total_days, 'total days')
-            book.book_end = book_end
-            book.total_price = day_price
-            book.status_id = 2
-            book.save()
-
-            room = Room.objects.get(pk=book.room_id)
-            room.person_count -= 1
-            room.save()
-            if room.person_count == 0:
-                room.is_full = 0
-                room.room_gender = 2
-                room.save()
+            room_data = BookingService.un_booking(book, request.data.get('book_end'))
             return Response({'data': {
-                'person_count': room.person_count,
-                'room_gender': room.room_gender
+                'person_count': room_data.person_count,
+                'room_gender': room_data.room_gender
             }})
-        return Response({'student': 'студент уже не жывет в обшежитие'})
+        raise APIException({'student': 'студент уже не жывет в обшежитие'})
 
 
 class PrivilegeView(mixins.ListModelMixin,
@@ -524,17 +507,96 @@ class PrivilegeView(mixins.ListModelMixin,
             return Response({'error': f'Это привилегия уже используется'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ContractDormApi(mixins.ListModelMixin,
+                      mixins.UpdateModelMixin,
+                      viewsets.GenericViewSet):
+    serializer_class = serializers.ContractSerializer
+    pagination_class = CustomPagination
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = BookFilter
+
+    def get_queryset(self):
+        return Booking.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        query = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(query)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            result = self.get_paginated_response(serializer.data)
+            data = result.data  # pagination data
+        else:
+            serializer = self.get_serializer(query, many=True)
+            data = serializer.data
+        return Response(data)
+
+    def update(self, request, *args, **kwargs):
+        book_id = kwargs.get('pk')
+        new_room_id = self.request.data.get('room')
+        newRoom = Room.objects.get(pk=new_room_id)
+        if newRoom.person_count >= newRoom.room_type.place:
+            raise APIException({'room_is_full': 'Это комната уже заполнена'})
+        else:
+            booking = get_object_or_404(Booking, pk=book_id)
+            old_book = booking.room_id
+            booking.room_id = new_room_id
+            newRoom.person_count += 1
+            newRoom.save()
+            booking.save()
+            if newRoom.person_count == newRoom.room_type.place:
+                newRoom.is_full = 1
+                newRoom.save()
+            if newRoom.room_gender == '2':
+                newRoom.room_gender = booking.student.gender
+                newRoom.save()
+            oldRoom = Room.objects.get(pk=old_book)
+            oldRoom.person_count -= 1
+            oldRoom.save()
+            if oldRoom.person_count == 0:
+                oldRoom.is_full = 0
+                oldRoom.room_gender = 2
+                oldRoom.save()
+            elif oldRoom.person_count < oldRoom.room_type.place:
+                oldRoom.is_full = 0
+                oldRoom.save()
+            return Response({'room': 'change room'})
+
+    @action(methods=['get'], detail=False)
+    def free_room(self, request, *args, **kwargs):
+        apartment = self.request.query_params.get('room')
+        floor = self.request.query_params.get('floor')
+        if apartment:
+            room = Room.objects. \
+                       filter(number__startswith=apartment, floor=floor, is_full=0, user_id=self.request.user.id). \
+                       values('number', 'id', 'person_count', 'room_gender').order_by('-number')[0:10]
+        else:
+            room = Room.objects.filter(floor=floor, is_full=0, user_id=self.request.user.id). \
+                       values('number', 'id', 'person_count', 'room_gender').order_by('number')[0:10]
+        serial = serializers.FreeRoomSerializer(room, many=True)
+        return Response({'data': serial.data})
+
+
 class FreePlaceApi(mixins.ListModelMixin,
                    viewsets.GenericViewSet):
-    queryset = Room.objects.all()
+    # queryset = Room.objects.all()
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = FreeRoomFilter
     permission_classes = (IsAuthenticated,)
     serializer_class = serializers.FreePlaceSerializer
     pagination_class = CustomPagination
 
+    def get_queryset(self):
+        if self.request.user.role == '1':
+            return Room.objects.select_related('room_type', 'user', 'building').order_by('-id')
+        elif self.request.user.role == '3':
+            return Room.objects.filter(user=self.request.user).select_related('room_type', 'user', 'building').order_by(
+                '-id')
+        else:
+            raise APIException({'error': 'you have no permission'})
+
     def list(self, request, *args, **kwargs):
-        free = Room.objects.select_related('building').annotate(
+        free = self.get_queryset().annotate(
             free_place=F('room_type__place') - F('person_count')
         ).values('id', 'number', 'building__name', 'building_id', 'is_full', 'floor', 'room_type__place',
                  'person_count', 'free_place', 'room_gender').order_by('building_id', 'number', 'is_full')
@@ -547,9 +609,6 @@ class FreePlaceApi(mixins.ListModelMixin,
         else:
             serializer = self.get_serializer(query, many=True)
             data = serializer.data
-        # build_serial = serializers.BuildingSimpleSerializer(Building.objects.all(), many=True)
-        # data['results'].append({'building': build_serial.data})
-        # data['building'] = build_serial.data
         return Response(data)
 
     @action(methods=['get'], detail=False)
@@ -581,7 +640,14 @@ class MainDormitoryApi(mixins.ListModelMixin,
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
-        query = Building.objects.annotate(
+        user = self.request.user.role
+        if user == '1':
+            room = Building.objects
+        elif user == '3':
+            room = Building.objects.filter(commandant=self.request.user.id)
+        else:
+            raise APIException({'error': 'You have no permission'})
+        query = room.annotate(
             total_rooms=Count('room__id', distinct=True),
             busy_rooms=Count('room', filter=Q(room__is_full=True), distinct=True),
             free_rooms=F('total_rooms') - F('busy_rooms'),
@@ -608,3 +674,5 @@ class CatApi(mixins.ListModelMixin, generics.GenericAPIView):
             'country': country.data,
             'student_type': student_type.data
         }})
+
+# class

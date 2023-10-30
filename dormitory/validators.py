@@ -1,5 +1,5 @@
 from rest_framework.exceptions import APIException
-from .models import (Building, RoomType, Faculty, Principal, CustomUser)
+from .models import (Building, RoomType, Faculty, CustomUser)
 
 
 def common_validate(object, data, title):
@@ -31,14 +31,6 @@ def validate_faculty(data):
     faculty = Faculty.objects.filter(name__iexact=data['name'])
     if faculty:
         errors.append(f'{data["name"]} уже добавлено')
-    return errors
-
-
-def validate_principal(data):
-    errors = []
-    principal = Principal.objects.filter(name__iexact=data['name'], last_name__iexact=data['last_name'])
-    if principal:
-        errors.append({'name': 'exists'})
     return errors
 
 

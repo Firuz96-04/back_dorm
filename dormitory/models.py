@@ -6,6 +6,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from imagekit.models import ProcessedImageField
+
 from .utils import main_util
 # Create your models here.
 from ant_back import settings
@@ -46,7 +47,7 @@ class Role(models.Model):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     ROLES = [
         ('1', 'admin'),
-        ('2', 'manager'),
+        ('2', 'accountant'),
         ('3', 'commandant')
     ]
 
@@ -140,7 +141,6 @@ class Building(models.Model):
     id = models.SmallAutoField(primary_key=True)
     name = models.CharField(max_length=25, blank=True)
     address = models.CharField(max_length=100, blank=True)
-    principal = models.ForeignKey(Principal, on_delete=models.CASCADE, related_name='buildings', blank=True, null=True)
     floor_count = models.SmallIntegerField(default=5)
     description = models.TextField(blank=True)
 
@@ -227,6 +227,8 @@ class Student(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=30, blank=True)
+    sure_name = models.CharField(max_length=30, blank=True)
+
     phone = models.CharField(max_length=15, blank=True)
     born = models.DateField()
     course = models.CharField(max_length=1, default=1)
@@ -251,6 +253,7 @@ class Student(models.Model):
 class Privilege(models.Model):
     id = models.SmallAutoField(primary_key=True)
     name = models.CharField(max_length=100)
+    # commandant = models.ForeignKey(Commandant, on_delete=models.CASCADE, blank=True, null=True)
     description = models.CharField(max_length=125, blank=True)
 
     def __str__(self):

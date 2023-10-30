@@ -2,11 +2,10 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers, status
 from rest_framework.serializers import ModelSerializer, Serializer
 from rest_framework.exceptions import APIException, ValidationError
-from .models import (Country, Principal, Faculty, Building,
+from .models import (Country, Faculty, Building,
                      RoomType, Student, Room, Privilege, Booking, CustomUser, Company, Group, StudentType)
 
-from .validators import (validate_building, validate_room, validate_faculty, common_validate,
-                         validate_principal, validate_city_country,
+from .validators import (validate_building, validate_room, validate_faculty, common_validate, validate_city_country,
                          validate_register)
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import TokenError
@@ -39,11 +38,55 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
         return validated_data
 
 
+class CustomUserSerializer(serializers.Serializer):
+    name = serializers.CharField(source='first_name')
+    last_name = serializers.CharField()
+    role = serializers.SerializerMethodField(method_name='get_role')
+
+    def get_role(self, obj):
+        role = ''
+        if obj.role == '1':
+            role = 'admin'
+        elif obj.role == '2':
+            role = 'accountant'
+
+        return role
+
+
+class CommandantUserSerializer(serializers.Serializer):
+    name = serializers.CharField(source='first_name')
+    last_name = serializers.CharField()
+    role = serializers.SerializerMethodField(method_name='get_role')
+    # building_name = serializers.CharField(source='commandant.building.name', read_only=True)
+    # building_id = serializers.CharField(source='commandant.building.id', read_only=True)
+    building = serializers.SerializerMethodField()
+
+    def get_building(self, obj):
+        building = obj.commandant.building
+        if building is None:
+            return None
+        else:
+            return {
+                'building_name': building.name,
+                'building_id': building.id,
+                'building_floor': building.floor_count,
+
+            }
+
+    def get_role(self, obj):
+        role = ''
+        if obj.role == '3':
+            role = 'commandant'
+
+        return role
+
+
 class UserSerializer(ModelSerializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
-    role = serializers.CharField(read_only=True)
+
+    # role = serializers.CharField(read_only=True)
 
     class Meta:
         model = CustomUser
@@ -57,6 +100,7 @@ class UserSerializer(ModelSerializer):
         return data
 
     def create(self, validated_data):
+        print(validated_data, 'data')
         user = CustomUser.objects.create(
             first_name=validated_data['first_name'],
             last_name=validated_data['last_name'],
@@ -94,13 +138,29 @@ class FacultySerializer(ModelSerializer):
         return data
 
 
+class FacultyEditSerializer(ModelSerializer):
+    class Meta:
+        model = Faculty
+        fields = ('id', 'name')
+
+    def validate(self, data):
+        faculty = Faculty.objects.filter(name=data['name'])
+        is_exist = faculty[0].name == data['name']
+        if is_exist:
+            raise APIException({'error': 'this faculty exists'})
+        return data
+
+
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = '__all__'
 
     def validate(self, data):
-        return common_validate(Group, data, 'group')
+        group = Group.objects.filter(name=data['name'], faculty=data['faculty'])
+        if group:
+            raise APIException({'error': 'this group exists'})
+        return data
 
     def to_representation(self, instance):
         response = super().to_representation(instance)
@@ -129,18 +189,6 @@ class CountryCounterSerializer(Serializer):
     id = serializers.IntegerField()
 
 
-class PrincipalSerializer(ModelSerializer):
-    class Meta:
-        model = Principal
-        fields = ('id', 'name', 'last_name', 'phone', 'address')
-
-    def validate(self, data):
-        errors = validate_principal(data)
-        if errors:
-            raise ValidationError({'errors': errors})
-        return data
-
-
 class FacultyCounterSerializer(Serializer):
     student_count = serializers.IntegerField()
     booking_count = serializers.IntegerField()
@@ -163,11 +211,11 @@ class GroupCounterSerializer(Serializer):
     booking_count = serializers.IntegerField()
     name = serializers.CharField()
     faculty = serializers.CharField(source='faculty.name')
+    faculty_id = serializers.IntegerField(source='faculty.id')
     id = serializers.IntegerField()
 
 
 class OnlyGroupSerializer(ModelSerializer):
-
     class Meta:
         model = Group
         fields = ('id', 'name')
@@ -181,7 +229,7 @@ class OnlyCompanySerializer(Serializer):
 class BuildingSerializer(ModelSerializer):
     class Meta:
         model = Building
-        fields = ('id', 'name', 'address', 'principal', 'floor_count', 'description')
+        fields = ('id', 'name', 'address', 'floor_count', 'description')
 
     def validate(self, data):
         errors = validate_building(data)
@@ -189,17 +237,15 @@ class BuildingSerializer(ModelSerializer):
             raise APIException({'error': errors[0]})
         return data
 
-    def to_representation(self, instance):
-        response = super().to_representation(instance)
-        response['principal'] = PrincipalSerializer(instance.principal).data
-
-        return response
+    # def to_representation(self, instance):
+    #     response = super().to_representation(instance)
+    #     return response
 
 
 class BuildingEditSerializer(ModelSerializer):
     class Meta:
         model = Building
-        fields = ('id', 'name', 'address', 'principal', 'floor_count', 'description')
+        fields = ('id', 'name', 'address', 'floor_count', 'description')
 
     def validate(self, data):
         name = data.get('name')
@@ -209,11 +255,9 @@ class BuildingEditSerializer(ModelSerializer):
                 raise APIException({'building': f'{name} уже добавлено'})
         return data
 
-    def to_representation(self, instance):
-        response = super().to_representation(instance)
-        response['principal'] = PrincipalSerializer(instance.principal).data
-
-        return response
+    # def to_representation(self, instance):
+    #     response = super().to_representation(instance)
+    #     return response
 
 
 class BuildingSimpleSerializer(Serializer):
@@ -241,7 +285,7 @@ class BookStudentSerializer(Serializer):
     gender = serializers.CharField(max_length=1)
 
     def get_full_name(self, obj):
-        return f'{obj.name} {obj.last_name}'
+        return f'{obj.name} {obj.last_name} {obj.sure_name}'
 
 
 class RoomTypeSerializer(ModelSerializer):
@@ -314,7 +358,7 @@ class StudentSerializer(ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ('id', 'name', 'last_name', 'country', 'phone', 'born', 'address',
+        fields = ('id', 'name', 'last_name', 'sure_name', 'country', 'phone', 'born', 'address',
                   'gender', 'company', 'student_type', 'group', 'course', 'user', 'created_at')
 
     def validate(self, data):
@@ -346,7 +390,7 @@ class StudentEditSerializer(ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ('id', 'name', 'last_name', 'country', 'phone', 'born', 'address',
+        fields = ('id', 'name', 'last_name', 'sure_name', 'country', 'phone', 'born', 'address',
                   'gender', 'company', 'student_type', 'group', 'course', 'user', 'created_at')
 
     def validate(self, data):
@@ -463,6 +507,33 @@ class PrivilegeSerializer(ModelSerializer):
         return data
 
 
+class ContractSerializer(ModelSerializer):
+    created_at = serializers.DateTimeField(format="%d.%m.%Y %H:%M", required=False)
+    user = serializers.CharField(read_only=True, required=False)
+    debt = serializers.SerializerMethodField(method_name='get_debt')
+    day_lives = serializers.SerializerMethodField(method_name='get_day_lives')
+
+    class Meta:
+        model = Booking
+        fields = ('id', 'student', 'room', 'privilege', 'user', 'total_price',
+                  'payed', 'debt', 'book_date', 'book_end', 'status', 'day_lives', 'created_at')
+
+    def get_debt(self, obj):
+        total_debt = obj.total_price - obj.payed
+        return str(total_debt)
+
+    def get_day_lives(self, obj):
+        # today = date.today()
+        total = obj.book_end - obj.book_date
+        return total.days
+
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+        response['room'] = BookRoomSerializer(instance.room).data
+        response['student'] = BookStudentSerializer(instance.student).data
+        return response
+
+
 class FreePlaceSerializer(Serializer):
     room_id = serializers.IntegerField(source='id')
     number = serializers.CharField()
@@ -511,3 +582,19 @@ class MainDormitorySerializer(Serializer):
     build_name = serializers.CharField()
     build_id = serializers.IntegerField()
     floor_size = serializers.IntegerField()
+
+
+class FreeRoomSerializer(Serializer):
+    room_id = serializers.IntegerField(source='id')
+    number = serializers.CharField()
+    person_count = serializers.IntegerField()
+    room_gender = serializers.SerializerMethodField()
+
+    def get_room_gender(self, obj):
+        gender = obj['room_gender']
+        if gender == '0':
+            return 'женское'
+        elif gender == '1':
+            return 'мужское'
+        else:
+            return 'пусто'

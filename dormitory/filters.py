@@ -1,6 +1,6 @@
 from django.db.models import Q, F
 from django_filters import rest_framework as filters
-from dormitory.models import Student, Room, Booking
+from dormitory.models import Student, Room, Booking, Group
 
 
 class StudentFilter(filters.FilterSet):
@@ -73,3 +73,12 @@ class RoomFilter(filters.FilterSet):
     class Meta:
         model = Room
         fields = ('room', 'building', 'gender')
+
+
+class GroupFilter(filters.FilterSet):
+    faculty = filters.NumberFilter()
+    name = filters.CharFilter(lookup_expr='startswith')
+
+    class Meta:
+        model = Group
+        fields = ('name', 'faculty')

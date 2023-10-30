@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django_filters',
     'dormitory.apps.DormitoryConfig',
     'accounts.apps.AccountsConfig',
+    'commandant.apps.CommandantConfig',
 ]
 
 MIDDLEWARE = [
